@@ -23,7 +23,7 @@ services:
 
   # 2. 시스템 백엔드 (Go)
   backend-core:
-    image: golang:1.23-alpine
+    image: golang:1.25-alpine
     container_name: dash-core
     working_dir: /app
     volumes:
