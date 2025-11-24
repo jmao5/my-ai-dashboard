@@ -10,9 +10,10 @@ services:
     volumes:
       - ./frontend:/app
     ports:
-      - "3005:5173" # [내노트북:3005] -> [컨테이너:3000]
+      - "3005:3000" 
     command: sh -c "npm install && npm run dev -- --host"
     environment:
+      - WATCHPACK_POLLING=true
       - PUBLIC_API_URL=http://sso.tplinkdns.com:8085 # 브라우저가 Go 서버를 찾을 주소
     depends_on:
       - backend-core
