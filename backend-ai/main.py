@@ -16,8 +16,8 @@ if not GOOGLE_API_KEY:
 else:
     genai.configure(api_key=GOOGLE_API_KEY)
 
-# 사용할 모델 선택 (gemini-pro가 텍스트 전용으로 빠르고 좋습니다)
-model = genai.GenerativeModel('gemini-pro')
+# 사용할 모델 선택
+model = genai.GenerativeModel('gemini-2.5-flash')
 
 app = FastAPI()
 
