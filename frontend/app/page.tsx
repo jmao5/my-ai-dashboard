@@ -1,54 +1,47 @@
 "use client";
 
 import { useState, useEffect } from "react";
-
-// 환경 변수 (컴포넌트 밖이나 안이나 상관없지만, 안에서 읽습니다)
-const SYS_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9015";
-const AI_API_URL = process.env.NEXT_PUBLIC_AI_URL || "http://localhost:9016";
+import { systemApi, aiApi } from "@/services/api"; // 👈 분리한 API 불러오기
 
 export default function Home() {
-  // 시스템 상태 (Go)
   const [stats, setStats] = useState({ cpu: 0, ram: 0 });
-  // AI 상태 (Python)
   const [aiData, setAiData] = useState({
     status: "Offline",
     message: "연결 중...",
   });
-
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 이렇게 하면 리액트가 이 함수의 동작을 완벽하게 통제할 수 있어 에러가 사라집니다.
     const fetchData = async () => {
       try {
-        // 1. Go 서버 데이터
-        const resSys = await fetch(`${SYS_API_URL}/api/status`);
-        if (resSys.ok) {
-          const dataSys = await resSys.json();
-          setStats(dataSys);
+        // 1. Go 서버 데이터 (Axios 사용)
+        // Promise.all을 쓰면 두 요청을 동시에 보내서 더 빠릅니다!
+        const [sysRes, aiRes] = await Promise.allSettled([
+          systemApi.getStatus(),
+          aiApi.getStatus(),
+        ]);
+
+        // Go 결과 처리
+        if (sysRes.status === "fulfilled") {
+          setStats(sysRes.value);
         }
 
-        // 2. Python 서버 데이터
-        const resAi = await fetch(`${AI_API_URL}/api/ai-status`);
-        if (resAi.ok) {
-          const dataAi = await resAi.json();
-          setAiData(dataAi);
+        // Python 결과 처리
+        if (aiRes.status === "fulfilled") {
+          setAiData(aiRes.value);
         } else {
           setAiData({ status: "Error", message: "AI 서버 응답 없음" });
         }
-
-        setLoading(false);
       } catch (error) {
-        console.error("API Error:", error);
-        setAiData({ status: "Discon", message: "연결 실패" });
+        console.error("API 호출 중 치명적 오류:", error);
+      } finally {
         setLoading(false);
       }
     };
 
-    void fetchData(); // 1. 처음에 바로 실행
-    const interval = setInterval(fetchData, 2000); // 2. 이후 2초마다 실행
-
-    return () => clearInterval(interval); // 3. 청소
+    fetchData();
+    const interval = setInterval(fetchData, 2000);
+    return () => clearInterval(interval);
   }, []);
 
   return (
@@ -97,7 +90,7 @@ export default function Home() {
         </div>
         <div className="mt-4 p-3 bg-gray-700 rounded-lg">
           <p className="text-sm text-gray-300 leading-relaxed">
-            "{aiData.message}"
+            {aiData.message}
           </p>
         </div>
       </div>

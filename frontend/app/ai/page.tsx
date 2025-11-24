@@ -1,11 +1,9 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { aiApi } from "@/services/api"; // 👈 API 서비스 사용
 
-// 환경 변수
-const AI_API_URL = process.env.NEXT_PUBLIC_AI_URL || "http://localhost:9016";
 export default function AiChatPage() {
-  // 채팅 메시지 목록 (누가 말했는지, 내용이 뭔지)
   const [messages, setMessages] = useState<
     { role: "user" | "bot"; text: string }[]
   >([
@@ -17,10 +15,8 @@ export default function AiChatPage() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // 자동 스크롤을 위한 참조
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // 스크롤을 항상 맨 아래로
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -29,40 +25,31 @@ export default function AiChatPage() {
   const sendMessage = async () => {
     if (!input.trim()) return;
 
-    // 1. 내 메시지 화면에 추가
     const userMsg = input;
     setMessages((prev) => [...prev, { role: "user", text: userMsg }]);
     setInput("");
     setLoading(true);
 
     try {
-      // 2. Python 서버로 전송
-      const res = await fetch(`${AI_API_URL}/api/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userMsg }),
-      });
+      // 👇 Axios로 교체된 API 호출 (코드가 훨씬 짧아짐)
+      const data = await aiApi.sendMessage(userMsg);
 
-      if (!res.ok) throw new Error("서버 응답 오류");
-
-      const data = await res.json();
-
-      // 3. AI 응답 화면에 추가
       setMessages((prev) => [...prev, { role: "bot", text: data.reply }]);
     } catch (error) {
-      console.error(error);
+      console.error("채팅 전송 실패:", error);
       setMessages((prev) => [
         ...prev,
-        { role: "bot", text: "죄송합니다. 서버와 연결이 끊겼습니다. 😢" },
+        { role: "bot", text: "죄송합니다. 서버 연결에 실패했습니다." },
       ]);
     } finally {
       setLoading(false);
     }
   };
 
+  // ... (HTML 부분은 기존과 100% 동일하므로 그대로 두셔도 됩니다) ...
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)] bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
-      {/* 1. 채팅창 헤더 */}
+      {/* 헤더 */}
       <div className="bg-gray-900 p-4 border-b border-gray-700 flex justify-between items-center">
         <h2 className="text-lg font-bold text-white flex items-center gap-2">
           🤖 AI Assistant
@@ -72,7 +59,7 @@ export default function AiChatPage() {
         </span>
       </div>
 
-      {/* 2. 메시지 영역 */}
+      {/* 메시지 목록 */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((msg, idx) => (
           <div
@@ -100,7 +87,7 @@ export default function AiChatPage() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* 3. 입력창 영역 */}
+      {/* 입력창 */}
       <div className="p-4 bg-gray-900 border-t border-gray-700">
         <div className="flex gap-2">
           <input
