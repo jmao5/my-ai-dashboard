@@ -15,8 +15,8 @@ services:
     command: sh -c "npm install && npm run dev"
     environment:
       - WATCHPACK_POLLING=true
-      # 프론트엔드가 백엔드(Go)에 요청 보낼 주소 (포트가 9015로 바뀜!)
-      - PUBLIC_API_URL=http://localhost:9015
+      # 👇 여기에 실제 사용할 주소를 넣습니다. (NEXT_PUBLIC_ 필수!)
+      - NEXT_PUBLIC_API_URL=http://sso.tplinkdns.com:9015
     depends_on:
       - backend-core
     networks:
