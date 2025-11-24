@@ -1,8 +1,7 @@
-version: "3.8"
+version: '3.8'
 
 services:
-  # 1. 프론트엔드 (Next.js)
-  # 접속 주소: http://localhost:9014
+  # 1. 프론트엔드
   frontend:
     image: node:20-alpine
     container_name: dash-frontend
@@ -10,20 +9,19 @@ services:
     volumes:
       - ./frontend:/app
     ports:
-      - "9014:3000" # [외부 9014] <-> [내부 3000]
-    # Next.js 실행 (외부 접속 허용 설정은 package.json에서 처리됨)
+      - "9014:3000"
     command: sh -c "npm install && npm run dev"
     environment:
       - WATCHPACK_POLLING=true
-      - NEXT_PUBLIC_API_URL=http://sso.tplinkdns.com:9015 # Go (시스템)
-      - NEXT_PUBLIC_AI_URL=http://sso.tplinkdns.com:9016  # Python (AI)
+      # .env 파일에서 읽어옵니다 👇
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+      - NEXT_PUBLIC_AI_URL=${NEXT_PUBLIC_AI_URL}
     depends_on:
       - backend-core
     networks:
       - dash-net
 
   # 2. 시스템 백엔드 (Go)
-  # 접속 주소: http://localhost:9015
   backend-core:
     image: golang:1.23-alpine
     container_name: dash-core
@@ -31,42 +29,45 @@ services:
     volumes:
       - ./backend-core:/app
     ports:
-      - "9015:8080" # [외부 9015] <-> [내부 8080]
-    # Air: Go 자동 재시작 도구
+      - "9015:8080"
     command: sh -c "go install github.com/air-verse/air@v1.52.3 && air"
     environment:
-      - DB_DSN=host=db user=myuser password=mypassword dbname=dashboard_db port=5432 sslmode=disable
+      # DB 접속 정보도 변수로 처리 👇
+      - DB_DSN=host=db user=${POSTGRES_USER} password=${POSTGRES_PASSWORD} dbname=${POSTGRES_DB} port=5432 sslmode=disable
       - AI_SERVICE_URL=http://backend-ai:8000
     networks:
       - dash-net
 
   # 3. AI 백엔드 (Python)
-  # 접속 주소: http://localhost:9016
   backend-ai:
     image: python:3.11-slim
     container_name: dash-ai
     working_dir: /app
     volumes:
-      - ./backend-ai:/app
+      - /home/jsh/docker/my-dashboard/backend-ai:/app
     ports:
-      - "9016:8000" # [외부 9016] <-> [내부 8000]
+      - "9016:8000"
     command: sh -c "pip install -r requirements.txt && python main.py"
+    environment:
+      # 가장 중요한 API 키! 👇
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      # DB 접속 정보
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
     networks:
       - dash-net
 
-  # 4. 데이터베이스 (PostgreSQL)
-  # 외부 접속: localhost:9017
+  # 4. 데이터베이스
   db:
     image: postgres:15-alpine
     container_name: dash-db
     environment:
-      POSTGRES_USER: myuser
-      POSTGRES_PASSWORD: mypassword
-      POSTGRES_DB: dashboard_db
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "9017:5432" # [외부 9017] <-> [내부 5432]
+      - "9017:5432"
     networks:
       - dash-net
 

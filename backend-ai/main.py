@@ -1,12 +1,23 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-import database # 방금 만든 파일 import
-import random
+import database
+import os
+import google.generativeai as genai # 👈 구글 라이브러리
 
-# 1. DB 테이블 생성 (서버 켜질 때 없으면 자동 생성)
+# 1. DB 초기화
 database.Base.metadata.create_all(bind=database.engine)
+
+# 2. Gemini 설정
+GOOGLE_API_KEY = os.getenv("GEMINI_API_KEY")
+if not GOOGLE_API_KEY:
+    print("⚠️ 경고: GEMINI_API_KEY가 설정되지 않았습니다!")
+else:
+    genai.configure(api_key=GOOGLE_API_KEY)
+
+# 사용할 모델 선택 (gemini-pro가 텍스트 전용으로 빠르고 좋습니다)
+model = genai.GenerativeModel('gemini-pro')
 
 app = FastAPI()
 
@@ -21,7 +32,6 @@ app.add_middleware(
 class ChatRequest(BaseModel):
     message: str
 
-# 2. DB 세션 가져오는 함수 (Dependency)
 def get_db():
     db = database.SessionLocal()
     try:
@@ -31,37 +41,45 @@ def get_db():
 
 @app.get("/")
 def read_root():
-    return {"message": "Python AI Server with DB is Running!"}
+    return {"message": "Gemini AI Server is Running!"}
 
 @app.get("/api/ai-status")
 def get_ai_status():
+    status = "Online" if GOOGLE_API_KEY else "Key Missing"
     return {
-        "status": "Online",
-        "message": "AI가 기억력을 가졌습니다! (DB 연동됨)"
+        "status": status,
+        "model": "Google Gemini Pro",
+        "message": "진짜 인공지능이 준비되었습니다."
     }
 
-# 3. 채팅 기록 불러오기 API (GET)
 @app.get("/api/chat/history")
 def get_chat_history(db: Session = Depends(get_db)):
-    # 최신순으로 정렬해서 가져오기 등은 나중에 추가 가능
-    history = db.query(database.ChatHistory).all()
-    # 프론트엔드 형식에 맞춰 변환
+    # 최근 50개만 가져오기 (너무 많으면 느리니까)
+    history = db.query(database.ChatHistory).order_by(database.ChatHistory.id.asc()).limit(50).all()
     return [{"role": h.role, "text": h.message} for h in history]
 
-# 4. 채팅 주고받기 API (POST) - DB 저장 기능 추가
+# 3. 핵심: 채팅 API (Gemini 연동)
 @app.post("/api/chat")
-def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
+async def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
     user_msg = request.message
 
     # (1) 유저 메시지 DB 저장
     db_user_msg = database.ChatHistory(role="user", message=user_msg)
     db.add(db_user_msg)
-    db.commit() # 저장 확정
+    db.commit()
 
-    # (2) AI 답변 생성 logic
-    ai_response = f"DB에 저장했습니다: '{user_msg}'"
-    if "안녕" in user_msg:
-        ai_response = "안녕하세요! 이전 대화 내용도 기억하고 있어요."
+    try:
+        # (2) Gemini에게 질문 던지기
+        if not GOOGLE_API_KEY:
+            ai_response = "API 키가 없어서 대답할 수 없어요. docker-compose.yml을 확인해주세요."
+        else:
+            # generate_content가 실제 구글 서버로 질문을 보냅니다.
+            response = model.generate_content(user_msg)
+            ai_response = response.text
+
+    except Exception as e:
+        ai_response = f"생각하다가 에러가 났어요: {str(e)}"
+        print(f"Gemini Error: {e}")
 
     # (3) AI 답변 DB 저장
     db_ai_msg = database.ChatHistory(role="bot", message=ai_response)
