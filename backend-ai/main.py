@@ -22,41 +22,17 @@ if not GOOGLE_API_KEY:
 else:
     genai.configure(api_key=GOOGLE_API_KEY)
 
-    print("\n🔍 --- Google API 제공 모델 목록 (상위 20개) ---")
+    # 👇 [수정] 고민할 것 없이 'gemini-2.5-flash'로 고정!
+    # (목록에 있는 이름 그대로 사용)
+    target_model = 'gemini-2.5-flash'
+
+    print(f"🚀 최신 모델 '{target_model}'을 로드합니다...")
     try:
-        # (1) generateContent를 지원하는 모든 모델 가져오기
-        all_models = [
-            m for m in genai.list_models()
-            if 'generateContent' in m.supported_generation_methods
-        ]
-
-        # (2) 그냥 있는 그대로 20개 출력 (이름 정렬 없이 구글이 주는 순서대로)
-        for i, m in enumerate(all_models[:20]):
-            print(f"[{i+1:02d}] {m.name}")
-
-        print("---------------------------------------------------\n")
-
-        # (3) 일단 서버가 켜져야 하니, 가장 안전한 'gemini-2.5-flash'로 설정해둡니다.
-        # 로그를 보시고 마음에 드는 모델 이름이 있다면 나중에 여기를 바꾸면 됩니다.
-        target_model_name = 'gemini-2.5-flash'
-
-        # 혹시 목록에 우리가 쓰려는 게 있는지 확인
-        if any(m.name == f"models/{target_model_name}" for m in all_models):
-            print(f"✅ '{target_model_name}' 모델을 찾아 연결했습니다.")
-            model = genai.GenerativeModel(target_model_name)
-        else:
-            print(f"⚠️ '{target_model_name}'를 찾을 수 없습니다. 목록의 첫 번째 모델을 사용합니다.")
-            if all_models:
-                first_model = all_models[0].name
-                print(f"👉 대체 모델: {first_model}")
-                model = genai.GenerativeModel(first_model)
-            else:
-                print("❌ 사용 가능한 모델이 하나도 없습니다!")
-
+        model = genai.GenerativeModel(target_model)
+        print("✅ 모델 로드 성공!")
     except Exception as e:
-        print(f"❌ 모델 목록 조회 실패: {e}")
-        print("   기본값 'gemini-2.5-flash'로 강제 설정합니다.")
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        print(f"❌ 모델 설정 실패: {e}")
+        print("   혹시 API 키 권한 문제일 수 있습니다.")
 
 app = FastAPI()
 
