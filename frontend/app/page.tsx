@@ -2,87 +2,104 @@
 
 import { useState, useEffect } from "react";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9015";
+// 환경 변수 (컴포넌트 밖이나 안이나 상관없지만, 안에서 읽습니다)
+const SYS_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9015";
+const AI_API_URL = process.env.NEXT_PUBLIC_AI_URL || "http://localhost:9016";
+
 export default function Home() {
-  // 1. 상태 관리 (초기값은 0)
+  // 시스템 상태 (Go)
   const [stats, setStats] = useState({ cpu: 0, ram: 0 });
+  // AI 상태 (Python)
+  const [aiData, setAiData] = useState({
+    status: "Offline",
+    message: "연결 중...",
+  });
+
   const [loading, setLoading] = useState(true);
 
-  // 2. 데이터 가져오는 함수
-
-  const fetchStats = async () => {
-    try {
-      // 👇 주소를 변수와 합칩니다
-      const res = await fetch(`${API_URL}/api/status`);
-
-      if (!res.ok) throw new Error("서버 응답 실패");
-
-      const data = await res.json();
-      setStats(data);
-      setLoading(false);
-    } catch (error) {
-      console.error("데이터 가져오기 실패:", error);
-    }
-  };
-
-  // 3. 화면이 켜지면 실행
   useEffect(() => {
-    void fetchStats(); // 처음에 한 번 실행
+    // 이렇게 하면 리액트가 이 함수의 동작을 완벽하게 통제할 수 있어 에러가 사라집니다.
+    const fetchData = async () => {
+      try {
+        // 1. Go 서버 데이터
+        const resSys = await fetch(`${SYS_API_URL}/api/status`);
+        if (resSys.ok) {
+          const dataSys = await resSys.json();
+          setStats(dataSys);
+        }
 
-    // 2초마다 계속 실행 (실시간 갱신)
-    const interval = setInterval(fetchStats, 2000);
+        // 2. Python 서버 데이터
+        const resAi = await fetch(`${AI_API_URL}/api/ai-status`);
+        if (resAi.ok) {
+          const dataAi = await resAi.json();
+          setAiData(dataAi);
+        } else {
+          setAiData({ status: "Error", message: "AI 서버 응답 없음" });
+        }
 
-    // 화면 꺼질 때 타이머 정리
-    return () => clearInterval(interval);
+        setLoading(false);
+      } catch (error) {
+        console.error("API Error:", error);
+        setAiData({ status: "Discon", message: "연결 실패" });
+        setLoading(false);
+      }
+    };
+
+    void fetchData(); // 1. 처음에 바로 실행
+    const interval = setInterval(fetchData, 2000); // 2. 이후 2초마다 실행
+
+    return () => clearInterval(interval); // 3. 청소
   }, []);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {/* 카드 1: 시스템 상태 (Real Data) */}
+      {/* 카드 1: 시스템 상태 */}
       <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg hover:border-blue-500 transition duration-300">
         <h3 className="text-gray-400 text-sm font-medium mb-2">
           System Health
         </h3>
-
         {loading ? (
-          <div className="text-gray-500 animate-pulse">데이터 로딩 중...</div>
+          <div className="text-gray-500 animate-pulse">Checking...</div>
         ) : (
           <>
             <div className="flex items-end space-x-2">
               <span className="text-4xl font-bold text-white">
                 {stats.cpu}%
               </span>
-              <span className="text-gray-500 mb-1">CPU Usage</span>
+              <span className="text-gray-500 mb-1">CPU</span>
             </div>
-
-            {/* 게이지 바 */}
             <div className="w-full bg-gray-700 h-2 rounded-full mt-4 overflow-hidden">
               <div
-                className="bg-blue-500 h-2 rounded-full transition-all duration-500 ease-out"
+                className="bg-blue-500 h-2 rounded-full transition-all duration-500"
                 style={{ width: `${stats.cpu}%` }}
               ></div>
             </div>
-
             <div className="mt-3 flex justify-between text-sm text-gray-400">
-              <span>RAM Usage</span>
+              <span>RAM</span>
               <span className="text-white">{stats.ram}%</span>
             </div>
           </>
         )}
       </div>
 
-      {/* 카드 2: AI 엔진 상태 (아직은 고정) */}
+      {/* 카드 2: AI 엔진 상태 */}
       <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg hover:border-purple-500 transition duration-300">
-        <h3 className="text-gray-400 text-sm font-medium mb-2">AI Engine</h3>
+        <h3 className="text-gray-400 text-sm font-medium mb-2">
+          AI Engine Status
+        </h3>
         <div className="flex items-center justify-between">
-          <span className="text-2xl font-bold text-green-400">Ready</span>
-          <span className="text-4xl">🧠</span>
+          <span
+            className={`text-2xl font-bold ${aiData.status === "Online" ? "text-green-400" : "text-red-400"}`}
+          >
+            {aiData.status}
+          </span>
+          <span className="text-4xl animate-bounce">🤖</span>
         </div>
-        <p className="mt-4 text-sm text-gray-400 leading-relaxed">
-          AI 서버 대기 중...
-          <br />
-          (Python 연동 예정)
-        </p>
+        <div className="mt-4 p-3 bg-gray-700 rounded-lg">
+          <p className="text-sm text-gray-300 leading-relaxed">
+            "{aiData.message}"
+          </p>
+        </div>
       </div>
 
       {/* 카드 3: 퀵 링크 */}
@@ -93,8 +110,7 @@ export default function Home() {
             <a
               href="https://github.com"
               target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center p-2 rounded hover:bg-gray-700 text-blue-400 transition"
+              className="flex items-center text-blue-400 hover:underline"
             >
               🔗 GitHub
             </a>
@@ -103,10 +119,9 @@ export default function Home() {
             <a
               href="http://sso.tplinkdns.com"
               target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center p-2 rounded hover:bg-gray-700 text-blue-400 transition"
+              className="flex items-center text-blue-400 hover:underline"
             >
-              ⚙️ 공유기 설정
+              ⚙️ Router
             </a>
           </li>
         </ul>
