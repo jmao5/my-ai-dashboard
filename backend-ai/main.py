@@ -4,35 +4,29 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 import database
 import os
-import google.generativeai as genai # 👈 구글 라이브러리
+import google.generativeai as genai
 
 # 1. DB 초기화
 database.Base.metadata.create_all(bind=database.engine)
 
-# 2. Gemini 설정
+# 2. Gemini 설정 (중복 코드 제거 및 최신 모델 설정)
 GOOGLE_API_KEY = os.getenv("GEMINI_API_KEY")
-if not GOOGLE_API_KEY:
-    print("⚠️ 경고: GEMINI_API_KEY가 설정되지 않았습니다!")
-else:
-    genai.configure(api_key=GOOGLE_API_KEY)
+model = None
 
-# 사용할 모델 선택
 if not GOOGLE_API_KEY:
     print("⚠️ 경고: GEMINI_API_KEY가 없습니다. .env 파일을 확인하세요.")
 else:
     genai.configure(api_key=GOOGLE_API_KEY)
 
-    # 👇 [수정] 고민할 것 없이 'gemini-2.5-flash'로 고정!
-    # (목록에 있는 이름 그대로 사용)
+    # 모델 고정 (가장 빠르고 최신인 flash 모델 추천)
     target_model = 'gemini-2.5-flash'
 
-    print(f"🚀 최신 모델 '{target_model}'을 로드합니다...")
+    print(f"🚀 AI 모델 '{target_model}' 로드 중...")
     try:
         model = genai.GenerativeModel(target_model)
         print("✅ 모델 로드 성공!")
     except Exception as e:
         print(f"❌ 모델 설정 실패: {e}")
-        print("   혹시 API 키 권한 문제일 수 있습니다.")
 
 app = FastAPI()
 
@@ -60,40 +54,71 @@ def read_root():
 
 @app.get("/api/ai-status")
 def get_ai_status():
-    status = "Online" if GOOGLE_API_KEY else "Key Missing"
+    status = "Online" if model else "Offline"
     return {
         "status": status,
-        "model": "Google Gemini Pro",
-        "message": "진짜 인공지능이 준비되었습니다."
+        "model": model.model_name if model else "None",
+        "message": "AI가 이제 이전 대화를 기억합니다! 🧠"
     }
 
 @app.get("/api/chat/history")
 def get_chat_history(db: Session = Depends(get_db)):
-    # 최근 50개만 가져오기 (너무 많으면 느리니까)
-    history = db.query(database.ChatHistory).order_by(database.ChatHistory.id.asc()).limit(50).all()
-    return [{"role": h.role, "text": h.message} for h in history]
+    # 최신순으로 가져오되, 다시 시간순(과거->현재)으로 정렬해야 채팅창에 제대로 보임
+    history = db.query(database.ChatHistory).order_by(database.ChatHistory.id.desc()).limit(50).all()
+    # 파이썬 리스트 뒤집기 ([::-1]) -> 과거부터 현재 순서로
+    return [{"role": h.role, "text": h.message} for h in history[::-1]]
 
-# 3. 핵심: 채팅 API (Gemini 연동)
+# 3. 핵심: 채팅 API (기억력 추가됨)
 @app.post("/api/chat")
 async def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
     user_msg = request.message
 
-    # (1) 유저 메시지 DB 저장
+    # (1) 유저 메시지 먼저 DB 저장 (기록용)
     db_user_msg = database.ChatHistory(role="user", message=user_msg)
     db.add(db_user_msg)
     db.commit()
 
+    ai_response = ""
+
     try:
-        # (2) Gemini에게 질문 던지기
-        if not GOOGLE_API_KEY:
-            ai_response = "API 키가 없어서 대답할 수 없어요. docker-compose.yml을 확인해주세요."
+        if not GOOGLE_API_KEY or not model:
+            ai_response = "API 키가 없거나 모델 로딩에 실패했습니다."
         else:
-            # generate_content가 실제 구글 서버로 질문을 보냅니다.
-            response = model.generate_content(user_msg)
+            # === 🔥 여기가 수정된 부분입니다 (기억력 주입) ===
+
+            # 1. DB에서 최근 대화 내역 가져오기 (최근 10개 정도가 적당)
+            # 너무 많이 가져오면 토큰 비용이 들거나 느려질 수 있음
+            recent_history = db.query(database.ChatHistory) \
+                .order_by(database.ChatHistory.id.desc()) \
+                .limit(10) \
+                .all()
+
+            # 2. Gemini가 이해하는 형식으로 변환 (List[dict])
+            # DB에서 가져온 건 최신순이므로 다시 뒤집어서(reversed) 시간순으로 만듦
+            gemini_history = []
+            for msg in reversed(recent_history):
+                # 우리 DB의 role: 'user', 'bot'
+                # Gemini의 role: 'user', 'model'
+                role = "user" if msg.role == "user" else "model"
+
+                # 방금 저장한 유저 메시지는 제외 (send_message할 때 보낼 거니까)
+                # 하지만 DB에는 이미 저장했으므로, DB ID가 현재 저장한 것보다 작은 것만 가져오거나
+                # 간단하게는 그냥 content만 리스트로 만듭니다.
+                if msg.message == user_msg and msg.role == 'user':
+                    continue
+
+                gemini_history.append({"role": role, "parts": [msg.message]})
+
+            # 3. 과거 기록을 담아서 채팅 세션 시작
+            chat_session = model.start_chat(history=gemini_history)
+
+            # 4. 질문 전송
+            response = chat_session.send_message(user_msg)
             ai_response = response.text
+            # ================================================
 
     except Exception as e:
-        ai_response = f"생각하다가 에러가 났어요: {str(e)}"
+        ai_response = f"에러 발생: {str(e)}"
         print(f"Gemini Error: {e}")
 
     # (3) AI 답변 DB 저장
