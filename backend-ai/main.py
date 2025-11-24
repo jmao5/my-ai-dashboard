@@ -22,7 +22,7 @@ if not GOOGLE_API_KEY:
 else:
     genai.configure(api_key=GOOGLE_API_KEY)
 
-    print("\n🔍 사용 가능한 Gemini 모델 검색 중...")
+    print("\n🔍 --- Google API 제공 모델 목록 (상위 20개) ---")
     try:
         # (1) generateContent를 지원하는 모든 모델 가져오기
         all_models = [
@@ -30,23 +30,28 @@ else:
             if 'generateContent' in m.supported_generation_methods
         ]
 
-        # (2) 이름에 'gemini'가 포함된 것만 필터링
-        gemini_models = [m for m in all_models if 'gemini' in m.name]
+        # (2) 그냥 있는 그대로 20개 출력 (이름 정렬 없이 구글이 주는 순서대로)
+        for i, m in enumerate(all_models[:20]):
+            print(f"[{i+1:02d}] {m.name}")
 
-        # (3) 최신순 정렬 (이름 기준 내림차순 정렬하면 보통 최신 버전이 위로 옴)
-        # 예: gemini-1.5-pro > gemini-1.5-flash > gemini-1.0-pro
-        gemini_models.sort(key=lambda x: x.name, reverse=True)
+        print("---------------------------------------------------\n")
 
-        if gemini_models:
-            # 가장 위에 있는(최신) 모델 선택
-            best_model = gemini_models[0]
-            print(f"✅ 모델 자동 선택 완료: {best_model.name}")
-            print(f"   (후보 목록: {[m.name for m in gemini_models[:3]]} ...)") # 상위 3개만 로그 출력
+        # (3) 일단 서버가 켜져야 하니, 가장 안전한 'gemini-2.5-flash'로 설정해둡니다.
+        # 로그를 보시고 마음에 드는 모델 이름이 있다면 나중에 여기를 바꾸면 됩니다.
+        target_model_name = 'gemini-2.5-flash'
 
-            model = genai.GenerativeModel(best_model.name)
+        # 혹시 목록에 우리가 쓰려는 게 있는지 확인
+        if any(m.name == f"models/{target_model_name}" for m in all_models):
+            print(f"✅ '{target_model_name}' 모델을 찾아 연결했습니다.")
+            model = genai.GenerativeModel(target_model_name)
         else:
-            print("❌ 'gemini' 모델을 찾을 수 없습니다. 기본값(gemini-2.5-flash)을 시도합니다.")
-            model = genai.GenerativeModel('gemini-2.5-flash')
+            print(f"⚠️ '{target_model_name}'를 찾을 수 없습니다. 목록의 첫 번째 모델을 사용합니다.")
+            if all_models:
+                first_model = all_models[0].name
+                print(f"👉 대체 모델: {first_model}")
+                model = genai.GenerativeModel(first_model)
+            else:
+                print("❌ 사용 가능한 모델이 하나도 없습니다!")
 
     except Exception as e:
         print(f"❌ 모델 목록 조회 실패: {e}")
