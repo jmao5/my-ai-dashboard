@@ -50,7 +50,7 @@ services:
       - ./backend-ai:/app
     ports:
       - "9016:8000" # [외부 9016] <-> [내부 8000]
-    command: sh -c "pip install fastapi uvicorn && uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
+    command: sh -c "pip install -r requirements.txt && python main.py"
     networks:
       - dash-net
 

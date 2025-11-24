@@ -30,4 +30,5 @@ def get_ai_status():
 # 터미널에서 직접 실행할 때를 위한 설정 (Docker에서는 uvicorn 명령어로 실행됨)
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # reload=True 옵션 추가 (코드 수정 시 자동 재시작)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
