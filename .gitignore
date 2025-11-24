@@ -1,0 +1,22 @@
+# Node
+node_modules/
+.svelte-kit/
+dist/
+.env
+.DS_Store
+
+# Go
+backend-core/tmp/
+backend-core/bin/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.env
+
+# Database Data (절대 올리면 안 됨!)
+postgres_data/
+
+# Docker volumes if locally mounted inside project
+db_data/

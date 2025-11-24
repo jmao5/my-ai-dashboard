@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  # 1. 프론트엔드 (SvelteKit)
+  # 접속 주소: http://localhost:3005
+  frontend:
+    image: node:20-alpine
+    container_name: dash-frontend
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+    ports:
+      - "3005:5173" # [내노트북:3005] -> [컨테이너:3000]
+    command: sh -c "npm install && npm run dev -- --host"
+    environment:
+      - PUBLIC_API_URL=http://sso.tplinkdns.com:8085 # 브라우저가 Go 서버를 찾을 주소
+    depends_on:
+      - backend-core
+    networks:
+      - dash-net
+
+  # 2. 시스템 백엔드 (Go)
+  # 접속 주소: http://localhost:8085
+  backend-core:
+    image: golang:1.23-alpine
+    container_name: dash-core
+    working_dir: /app
+    volumes:
+      - ./backend-core:/app
+    ports:
+      - "8085:8080" # [내노트북:8085] -> [컨테이너:8080]
+    # Air: Go 코드 수정 시 자동 재시작 도구 설치 및 실행
+    command: sh -c "go install github.com/air-verse/air@latest && air"
+    environment:
+      - DB_DSN=host=db user=myuser password=mypassword dbname=dashboard_db port=5432 sslmode=disable
+      - AI_SERVICE_URL=http://backend-ai:8000 # Go가 Python을 찾을 때 쓰는 내부 주소
+    networks:
+      - dash-net
+
+  # 3. AI 백엔드 (Python)
+  # 접속 주소: http://localhost:8005
+  backend-ai:
+    image: python:3.11-slim
+    container_name: dash-ai
+    working_dir: /app
+    volumes:
+      - ./backend-ai:/app
+    ports:
+      - "8005:8000" # [내노트북:8005] -> [컨테이너:8000]
+    command: sh -c "pip install fastapi uvicorn && uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
+    networks:
+      - dash-net
+
+  # 4. 데이터베이스 (PostgreSQL)
+  # 외부 접속: localhost:5435
+  db:
+    image: postgres:15-alpine
+    container_name: dash-db
+    environment:
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: dashboard_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5435:5432" # [내노트북:5435] -> [컨테이너:5432]
+    networks:
+      - dash-net
+
+volumes:
+  postgres_data:
+
+networks:
+  dash-net:
+    driver: bridge
