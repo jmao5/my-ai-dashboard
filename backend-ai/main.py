@@ -17,7 +17,41 @@ else:
     genai.configure(api_key=GOOGLE_API_KEY)
 
 # 사용할 모델 선택
-model = genai.GenerativeModel('gemini-2.5-flash')
+if not GOOGLE_API_KEY:
+    print("⚠️ 경고: GEMINI_API_KEY가 없습니다. .env 파일을 확인하세요.")
+else:
+    genai.configure(api_key=GOOGLE_API_KEY)
+
+    print("\n🔍 사용 가능한 Gemini 모델 검색 중...")
+    try:
+        # (1) generateContent를 지원하는 모든 모델 가져오기
+        all_models = [
+            m for m in genai.list_models()
+            if 'generateContent' in m.supported_generation_methods
+        ]
+
+        # (2) 이름에 'gemini'가 포함된 것만 필터링
+        gemini_models = [m for m in all_models if 'gemini' in m.name]
+
+        # (3) 최신순 정렬 (이름 기준 내림차순 정렬하면 보통 최신 버전이 위로 옴)
+        # 예: gemini-1.5-pro > gemini-1.5-flash > gemini-1.0-pro
+        gemini_models.sort(key=lambda x: x.name, reverse=True)
+
+        if gemini_models:
+            # 가장 위에 있는(최신) 모델 선택
+            best_model = gemini_models[0]
+            print(f"✅ 모델 자동 선택 완료: {best_model.name}")
+            print(f"   (후보 목록: {[m.name for m in gemini_models[:3]]} ...)") # 상위 3개만 로그 출력
+
+            model = genai.GenerativeModel(best_model.name)
+        else:
+            print("❌ 'gemini' 모델을 찾을 수 없습니다. 기본값(gemini-2.5-flash)을 시도합니다.")
+            model = genai.GenerativeModel('gemini-2.5-flash')
+
+    except Exception as e:
+        print(f"❌ 모델 목록 조회 실패: {e}")
+        print("   기본값 'gemini-2.5-flash'로 강제 설정합니다.")
+        model = genai.GenerativeModel('gemini-2.5-flash')
 
 app = FastAPI()
 
