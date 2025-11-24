@@ -28,6 +28,7 @@ services:
     working_dir: /app
     volumes:
       - ./backend-core:/app
+      - /var/run/docker.sock:/var/run/docker.sock # Go 서버가 호스트의 도커를 만질 수 있게 권한 부여
     ports:
       - "9015:8080"
     command: sh -c "go install github.com/air-verse/air@v1.52.3 && air"

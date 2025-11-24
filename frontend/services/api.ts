@@ -9,6 +9,25 @@ export const systemApi = {
     const response = await axios.get(`${API_CONFIG.GO_API_URL}/api/status`);
     return response.data;
   },
+
+  // 도커 목록 가져오기
+  getContainers: async () => {
+    const response = await axios.get(
+      `${API_CONFIG.GO_API_URL}/api/docker/list`,
+    );
+    return response.data;
+  },
+
+  // 컨테이너 재시작 요청
+  restartContainer: async (containerId: string) => {
+    const response = await axios.post(
+      `${API_CONFIG.GO_API_URL}/api/docker/restart`,
+      {
+        containerId,
+      },
+    );
+    return response.data;
+  },
 };
 
 // 2. Python AI 백엔드 API 함수들
