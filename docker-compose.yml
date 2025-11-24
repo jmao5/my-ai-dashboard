@@ -1,8 +1,8 @@
 version: "3.8"
 
 services:
-  # 1. 프론트엔드 (SvelteKit)
-  # 접속 주소: http://localhost:3005
+  # 1. 프론트엔드 (Next.js)
+  # 접속 주소: http://localhost:9014
   frontend:
     image: node:20-alpine
     container_name: dash-frontend
@@ -10,18 +10,20 @@ services:
     volumes:
       - ./frontend:/app
     ports:
-      - "3005:3000"
+      - "9014:3000" # [외부 9014] <-> [내부 3000]
+    # Next.js 실행 (외부 접속 허용 설정은 package.json에서 처리됨)
     command: sh -c "npm install && npm run dev"
     environment:
       - WATCHPACK_POLLING=true
-      - PUBLIC_API_URL=http://sso.tplinkdns.com:8085 # 브라우저가 Go 서버를 찾을 주소
+      # 프론트엔드가 백엔드(Go)에 요청 보낼 주소 (포트가 9015로 바뀜!)
+      - PUBLIC_API_URL=http://localhost:9015
     depends_on:
       - backend-core
     networks:
       - dash-net
 
   # 2. 시스템 백엔드 (Go)
-  # 접속 주소: http://localhost:8085
+  # 접속 주소: http://localhost:9015
   backend-core:
     image: golang:1.23-alpine
     container_name: dash-core
@@ -29,17 +31,17 @@ services:
     volumes:
       - ./backend-core:/app
     ports:
-      - "8085:8080" # [내노트북:8085] -> [컨테이너:8080]
-    # Air: Go 코드 수정 시 자동 재시작 도구 설치 및 실행
+      - "9015:8080" # [외부 9015] <-> [내부 8080]
+    # Air: Go 자동 재시작 도구
     command: sh -c "go install github.com/air-verse/air@latest && air"
     environment:
       - DB_DSN=host=db user=myuser password=mypassword dbname=dashboard_db port=5432 sslmode=disable
-      - AI_SERVICE_URL=http://backend-ai:8000 # Go가 Python을 찾을 때 쓰는 내부 주소
+      - AI_SERVICE_URL=http://backend-ai:8000
     networks:
       - dash-net
 
   # 3. AI 백엔드 (Python)
-  # 접속 주소: http://localhost:8005
+  # 접속 주소: http://localhost:9016
   backend-ai:
     image: python:3.11-slim
     container_name: dash-ai
@@ -47,13 +49,13 @@ services:
     volumes:
       - ./backend-ai:/app
     ports:
-      - "8005:8000" # [내노트북:8005] -> [컨테이너:8000]
+      - "9016:8000" # [외부 9016] <-> [내부 8000]
     command: sh -c "pip install fastapi uvicorn && uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
     networks:
       - dash-net
 
   # 4. 데이터베이스 (PostgreSQL)
-  # 외부 접속: localhost:5435
+  # 외부 접속: localhost:9017
   db:
     image: postgres:15-alpine
     container_name: dash-db
@@ -64,7 +66,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5435:5432" # [내노트북:5435] -> [컨테이너:5432]
+      - "9017:5432" # [외부 9017] <-> [내부 5432]
     networks:
       - dash-net
 
