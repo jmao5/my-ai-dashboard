@@ -26,4 +26,11 @@ export const aiApi = {
     });
     return response.data;
   },
+  // 채팅 기록 가져오기
+  getHistory: async () => {
+    const response = await axios.get(
+      `${API_CONFIG.AI_API_URL}/api/chat/history`,
+    );
+    return response.data;
+  },
 };

@@ -1,12 +1,15 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel # 👈 데이터 검사 도구 추가
-import platform
-import random # 👈 랜덤 답변용
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+import database # 방금 만든 파일 import
+import random
+
+# 1. DB 테이블 생성 (서버 켜질 때 없으면 자동 생성)
+database.Base.metadata.create_all(bind=database.engine)
 
 app = FastAPI()
 
-# ... (기존 CORS 설정 유지) ...
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -15,41 +18,58 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 1. 채팅 메시지 형식 정의 (이렇게 생긴 데이터만 받겠다!)
 class ChatRequest(BaseModel):
     message: str
 
+# 2. DB 세션 가져오는 함수 (Dependency)
+def get_db():
+    db = database.SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
 @app.get("/")
 def read_root():
-    return {"message": "Python AI Server is Running!"}
+    return {"message": "Python AI Server with DB is Running!"}
 
 @app.get("/api/ai-status")
 def get_ai_status():
     return {
         "status": "Online",
-        "model": "Basic-Bot v1.0",
-        "system": f"Running on {platform.system()}",
-        "message": "AI 엔진이 명령을 기다리고 있습니다."
+        "message": "AI가 기억력을 가졌습니다! (DB 연동됨)"
     }
 
-# 2. 채팅 API 추가 (POST 방식)
+# 3. 채팅 기록 불러오기 API (GET)
+@app.get("/api/chat/history")
+def get_chat_history(db: Session = Depends(get_db)):
+    # 최신순으로 정렬해서 가져오기 등은 나중에 추가 가능
+    history = db.query(database.ChatHistory).all()
+    # 프론트엔드 형식에 맞춰 변환
+    return [{"role": h.role, "text": h.message} for h in history]
+
+# 4. 채팅 주고받기 API (POST) - DB 저장 기능 추가
 @app.post("/api/chat")
-def chat_with_ai(request: ChatRequest):
+def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
     user_msg = request.message
 
-    # 지금은 간단한 규칙 기반 봇이지만, 나중에 여기에 ChatGPT 등을 붙일 수 있습니다.
-    ai_response = f"당신이 보낸 메시지: '{user_msg}' 잘 받았습니다!"
+    # (1) 유저 메시지 DB 저장
+    db_user_msg = database.ChatHistory(role="user", message=user_msg)
+    db.add(db_user_msg)
+    db.commit() # 저장 확정
 
+    # (2) AI 답변 생성 logic
+    ai_response = f"DB에 저장했습니다: '{user_msg}'"
     if "안녕" in user_msg:
-        ai_response = "안녕하세요! 무엇을 도와드릴까요?"
-    elif "상태" in user_msg:
-        ai_response = "현재 시스템 상태는 아주 양호합니다. (Go 서버 확인 됨)"
-    elif "뉴스" in user_msg:
-        ai_response = "최신 뉴스를 요약해 드릴까요? (기능 준비 중)"
+        ai_response = "안녕하세요! 이전 대화 내용도 기억하고 있어요."
+
+    # (3) AI 답변 DB 저장
+    db_ai_msg = database.ChatHistory(role="bot", message=ai_response)
+    db.add(db_ai_msg)
+    db.commit()
 
     return {"reply": ai_response}
 
 if __name__ == "__main__":
     import uvicorn
-    # reload=True로 수정했던 부분 유지
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
