@@ -9,8 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docker/docker/api/types/container" // 수정됨 (import 경로 주의)
+	// 👇 [수정] 구버전 SDK 호환 패키지 경로
+	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
+
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/mem"
 )
@@ -20,7 +22,6 @@ type SystemStats struct {
 	RAM float64 `json:"ram"`
 }
 
-// 도커 컨테이너 정보 구조체
 type ContainerInfo struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`
@@ -28,7 +29,6 @@ type ContainerInfo struct {
 	Status string `json:"status"`
 }
 
-// 재시작 요청 받을 구조체
 type RestartRequest struct {
 	ContainerID string `json:"containerId"`
 }
@@ -62,17 +62,18 @@ func getSystemStats(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(stats)
 }
 
-// 👇 1. 도커 컨테이너 목록 가져오기 API
 func getContainers(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
+
+	// 클라이언트 생성
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// 모든 컨테이너 조회
-	containers, err := cli.ContainerList(ctx, container.ListOptions{All: true})
+	// 👇 [수정] 구버전 SDK용 ListOptions 사용 (types.ContainerListOptions)
+	containers, err := cli.ContainerList(ctx, types.ContainerListOptions{All: true})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -80,14 +81,18 @@ func getContainers(w http.ResponseWriter, r *http.Request) {
 
 	var results []ContainerInfo
 	for _, ctr := range containers {
-		// 우리 프로젝트 컨테이너만 필터링 (이름에 'dash'가 들어간 것만)
+		// 이름이 없는 경우 방지
+		if len(ctr.Names) == 0 {
+			continue
+		}
 		name := strings.TrimPrefix(ctr.Names[0], "/")
+		// 우리 프로젝트 컨테이너만 필터링
 		if strings.Contains(name, "dash") {
 			results = append(results, ContainerInfo{
 				ID:     ctr.ID,
 				Name:   name,
-				State:  ctr.State,  // running, exited 등
-				Status: ctr.Status, // "Up 2 hours" 등
+				State:  ctr.State,
+				Status: ctr.Status,
 			})
 		}
 	}
@@ -96,7 +101,6 @@ func getContainers(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(results)
 }
 
-// 👇 2. 컨테이너 재시작 API
 func restartContainer(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		http.Error(w, "Only POST allowed", http.StatusMethodNotAllowed)
@@ -116,9 +120,10 @@ func restartContainer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 컨테이너 재시작 (타임아웃 설정 가능)
-	// Timeout은 deprecated 되었지만 구버전 호환성을 위해 nil이나 정수포인터 사용
-	err = cli.ContainerRestart(ctx, req.ContainerID, container.StopOptions{})
+	// 👇 [수정] 구버전 SDK는 StopOptions 대신 *time.Duration을 받습니다.
+	// nil을 넣으면 기본 설정대로 재시작합니다.
+	err = cli.ContainerRestart(ctx, req.ContainerID, nil)
+
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Restart failed: %v", err), http.StatusInternalServerError)
 		return
@@ -130,7 +135,6 @@ func restartContainer(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	http.HandleFunc("/api/status", enableCORS(getSystemStats))
-	// 새로운 API 등록
 	http.HandleFunc("/api/docker/list", enableCORS(getContainers))
 	http.HandleFunc("/api/docker/restart", enableCORS(restartContainer))
 
