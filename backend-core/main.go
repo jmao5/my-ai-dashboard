@@ -113,24 +113,37 @@ func restartContainer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := context.Background()
-	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// 👇 [수정] 구버전 SDK는 StopOptions 대신 *time.Duration을 받습니다.
-	// nil을 넣으면 기본 설정대로 재시작합니다.
-	err = cli.ContainerRestart(ctx, req.ContainerID, nil)
-
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Restart failed: %v", err), http.StatusInternalServerError)
-		return
-	}
-
+	// 1. 클라이언트에게 먼저 "알겠어!"라고 응답을 보냅니다. (성공 메시지)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"message": "Restarted successfully"})
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "Restart command received. Restarting in 1 second...",
+	})
+
+	// 응답이 확실히 전송되도록 플러시(Flush) - 선택사항이지만 안전함
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
+	}
+
+	// 2. 별도의 고루틴(백그라운드)에서 1초 뒤에 재시작을 실행합니다.
+	// (메인 스레드는 이미 응답을 보내고 끝났으므로 에러가 안 남)
+	go func(targetID string) {
+		// 1초 대기 (응답이 날아갈 시간 벌어주기)
+		time.Sleep(1 * time.Second)
+
+		ctx := context.Background()
+		cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+		if err != nil {
+			fmt.Printf("Error creating client: %v\n", err)
+			return
+		}
+
+		fmt.Printf("♻️ Restarting container: %s\n", targetID)
+		// 재시작 실행
+		err = cli.ContainerRestart(ctx, targetID, nil)
+		if err != nil {
+			fmt.Printf("❌ Failed to restart container %s: %v\n", targetID, err)
+		}
+	}(req.ContainerID)
 }
 
 func main() {

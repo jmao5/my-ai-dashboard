@@ -10,20 +10,20 @@ export default function Home() {
   const { data: stats } = useQuery({
     queryKey: ["systemStatus"],
     queryFn: systemApi.getStatus,
-    refetchInterval: 2000,
+    refetchInterval: 10000,
   });
 
   const { data: aiData } = useQuery({
     queryKey: ["aiStatus"],
     queryFn: aiApi.getStatus,
-    refetchInterval: 5000, // AI 상태는 좀 천천히
+    refetchInterval: 30000, // AI 상태는 좀 천천히
   });
 
   // 👇 1. 도커 컨테이너 목록 쿼리 (3초마다 갱신)
   const { data: containers = [] } = useQuery({
     queryKey: ["dockerContainers"],
     queryFn: systemApi.getContainers,
-    refetchInterval: 3000,
+    refetchInterval: 20000,
   });
 
   // 👇 2. 재시작 Mutation
