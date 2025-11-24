@@ -13,7 +13,7 @@ export default function Home() {
       // ⚠️ 주의: 브라우저 주소창에 치는 주소여야 합니다.
       // 로컬 테스트용: http://localhost:9015/api/status
       // 외부 접속용: http://sso.tplinkdns.com:9015/api/status
-      const res = await fetch('http://localhost:9015/api/status');
+      const res = await fetch('http://sso.tplinkdns.com:9015/api/status');
 
       if (!res.ok) throw new Error('서버 응답 실패');
 
