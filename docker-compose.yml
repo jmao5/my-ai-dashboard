@@ -13,9 +13,11 @@ services:
     command: sh -c "npm install && npm run dev"
     environment:
       - WATCHPACK_POLLING=true
-      # .env 파일에서 읽어옵니다 👇
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
       - NEXT_PUBLIC_AI_URL=${NEXT_PUBLIC_AI_URL}
+      - NEXTAUTH_URL=http://sso.tplinkdns.com:9014
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
     depends_on:
       - backend-core
     networks:
