@@ -36,6 +36,18 @@ export const systemApi = {
     );
     return response.data;
   },
+
+  // 로그 가져오기 (텍스트 데이터를 받으므로 responseType: text)
+  getLogs: async (containerId: string) => {
+    const response = await axios.get(
+      `${API_CONFIG.GO_API_URL}/api/docker/logs`,
+      {
+        params: { id: containerId },
+        responseType: "text", // JSON이 아니라 텍스트 덩어리임
+      },
+    );
+    return response.data;
+  },
 };
 
 // 2. Python AI 백엔드 API 함수들

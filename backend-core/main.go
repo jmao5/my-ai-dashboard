@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	_ "bytes"
 	"context"
 	"database/sql" // 👈 DB 연동 패키지
 	"encoding/json"
@@ -13,6 +15,7 @@ import (
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
+	"github.com/docker/docker/pkg/stdcopy"
 	_ "github.com/lib/pq" // 👈 Postgres 드라이버 (직접 안 써도 import 필수)
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/mem"
@@ -223,6 +226,48 @@ func restartContainer(w http.ResponseWriter, r *http.Request) {
 	}(req.ContainerID)
 }
 
+// 컨테이너 로그 가져오기 API
+func getContainerLogs(w http.ResponseWriter, r *http.Request) {
+	// 1. 어떤 컨테이너의 로그를 볼지 ID 받기
+	containerID := r.URL.Query().Get("id")
+	if containerID == "" {
+		http.Error(w, "Missing container id", http.StatusBadRequest)
+		return
+	}
+
+	ctx := context.Background()
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// 2. 로그 옵션 설정 (최근 100줄, 타임스탬프 포함)
+	options := types.ContainerLogsOptions{
+		ShowStdout: true,
+		ShowStderr: true,
+		Tail:       "100", // 마지막 100줄만 가져옴
+		Timestamps: false,
+	}
+
+	// 3. 도커에게 로그 요청
+	out, err := cli.ContainerLogs(ctx, containerID, options)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer out.Close()
+
+	// 4. 로그 포맷 정리 (Docker 로그는 헤더가 섞여있어서 stdcopy로 발라내야 함)
+	var logBuf bytes.Buffer
+	// Stdout과 Stderr를 모두 logBuf에 담습니다.
+	stdcopy.StdCopy(&logBuf, &logBuf, out)
+
+	// 5. 결과 반환 (텍스트 그대로)
+	w.Header().Set("Content-Type", "text/plain")
+	w.Write(logBuf.Bytes())
+}
+
 // 청소부 함수: 1시간마다 실행되어, 24시간 지난 데이터 삭제
 func startCleanupRoutine() {
 	// 1시간 간격 타이머
@@ -260,6 +305,9 @@ func main() {
 	http.HandleFunc("/api/status", enableCORS(getSystemStats))
 	http.HandleFunc("/api/docker/list", enableCORS(getContainers))
 	http.HandleFunc("/api/docker/restart", enableCORS(restartContainer))
+
+	// 로그 API 등록
+	http.HandleFunc("/api/docker/logs", enableCORS(getContainerLogs))
 
 	// 이력 조회 API
 	http.HandleFunc("/api/metrics/history", enableCORS(getMetricsHistory))
