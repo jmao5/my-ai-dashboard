@@ -3,6 +3,7 @@ node_modules/
 .svelte-kit/
 dist/
 .env
+.env.local
 .DS_Store
 
 # Go
@@ -19,4 +20,6 @@ __pycache__/
 postgres_data/
 
 # Docker volumes if locally mounted inside project
-db_data/
+db_data
+
+/
