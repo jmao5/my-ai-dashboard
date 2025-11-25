@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { signIn } from "next-auth/react";
+import { useState, useEffect } from "react";
+import { signIn, getCsrfToken } from "next-auth/react"; // 👈 getCsrfToken 추가
 import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
@@ -10,23 +10,50 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  // ✅ [핵심] 페이지 로드 시 CSRF 토큰을 강제로 갱신 (Zombie Token 제거)
+  useEffect(() => {
+    async function wakeUp() {
+      await getCsrfToken(); // 서버를 찔러서 새 토큰을 받아옵니다.
+      console.log("CSRF Token Refreshed");
+    }
+    wakeUp();
+  }, []);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
 
-    // NextAuth의 signIn 함수 호출
-    const res = await signIn("credentials", {
-      password: password,
-      redirect: false, // 페이지 이동을 우리가 수동으로 처리
-    });
+    try {
+      console.log("Attempting login..."); // 디버깅용
 
-    if (res?.error) {
-      setError("비밀번호가 틀렸습니다. 🚨");
+      const res = await signIn("credentials", {
+        password: password,
+        redirect: false,
+      });
+
+      console.log("Login Response:", res); // 결과 확인용
+
+      // 응답이 아예 없거나 status가 200(ok)이 아닐 때 처리
+      if (!res || res.error) {
+        console.error("Login Failed:", res?.error);
+        setError("비밀번호가 틀렸거나 서버 연결에 실패했습니다. 🚨");
+        setLoading(false);
+
+        // 실패했다면 토큰이 꼬였을 수 있으니 다시 한 번 갱신
+        await getCsrfToken();
+      } else {
+        // 성공
+        console.log("Login Success! Redirecting...");
+        // SPA 방식 이동 (router.push) 전에 router.refresh()로 상태 동기화
+        router.refresh();
+        router.replace("/");
+      }
+    } catch (err) {
+      // 네트워크 에러 등 예외 처리
+      console.error("Unexpected Error:", err);
+      setError("알 수 없는 오류가 발생했습니다.");
       setLoading(false);
-    } else {
-      router.push("/"); // 성공 시 홈으로 이동
-      router.refresh();
     }
   };
 
