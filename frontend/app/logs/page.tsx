@@ -58,12 +58,12 @@ export default function LogsPage() {
   return (
     <div className="space-y-4 h-[calc(100vh-8rem)] flex flex-col relative">
       {/* 상단 헤더 */}
-      <div className="flex justify-between items-center bg-gray-800 p-4 rounded-xl border border-gray-700">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-gray-800 p-4 rounded-xl border border-gray-700 gap-4">
         <h2 className="text-xl font-bold text-white flex items-center gap-2">
           📝 System Logs
         </h2>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full md:w-auto justify-between md:justify-end">
           {/* 👇 [추가] AI 분석 버튼 */}
           <button
             onClick={handleAnalyze}

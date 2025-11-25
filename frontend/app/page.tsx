@@ -174,8 +174,8 @@ export default function Home() {
           <span className="text-xs text-gray-400">Auto Refresh (3s)</span>
         </div>
 
-        <div className="p-0">
-          <table className="w-full text-left text-sm text-gray-300">
+        <div className="p-0 overflow-x-auto">
+          <table className="w-full text-left text-sm text-gray-300 min-w-[600px]">
             <thead className="bg-gray-900 text-gray-400 uppercase text-xs">
               <tr>
                 <th className="px-6 py-3">Name</th>
