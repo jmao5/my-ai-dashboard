@@ -41,6 +41,10 @@ app.add_middleware(
 class ChatRequest(BaseModel):
     message: str
 
+# 로그 분석 요청용 데이터 구조
+class AnalysisRequest(BaseModel):
+    log_text: str
+
 def get_db():
     db = database.SessionLocal()
     try:
@@ -127,6 +131,41 @@ async def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
     db.commit()
 
     return {"reply": ai_response}
+
+# 로그 분석 전용 API
+@app.post("/api/analyze/log")
+async def analyze_log(request: AnalysisRequest):
+    log_content = request.log_text
+
+    # 로그가 너무 길면 자릅니다 (토큰 제한 및 비용 절약)
+    if len(log_content) > 5000:
+        log_content = log_content[-5000:] # 뒤에서부터 5000자
+
+    # 시스템 전문가 프롬프트 (페르소나 부여)
+    prompt = f"""
+    You are a Senior Linux System Administrator and DevOps Engineer.
+    Please analyze the following server logs and provide a report in Korean(한국어).
+    
+    [Logs]
+    {log_content}
+    
+    [Instructions]
+    1. Summarize the key events.
+    2. Identify any Errors or Warnings.
+    3. Suggest specific solutions or commands to fix the issues.
+    4. Use Markdown format (bold, code blocks).
+    """
+
+    try:
+        if not model:
+            return {"reply": "AI 모델이 로드되지 않아 분석할 수 없습니다."}
+
+        response = model.generate_content(prompt)
+        return {"reply": response.text}
+
+    except Exception as e:
+        print(f"Analysis Error: {e}")
+        return {"reply": f"분석 중 오류가 발생했습니다: {str(e)}"}
 
 if __name__ == "__main__":
     import uvicorn

@@ -76,4 +76,15 @@ export const aiApi = {
     );
     return response.data;
   },
+
+  // 로그 분석 요청
+  analyzeLog: async (logText: string) => {
+    const response = await axios.post(
+      `${API_CONFIG.AI_API_URL}/api/analyze/log`,
+      {
+        log_text: logText,
+      },
+    );
+    return response.data;
+  },
 };
