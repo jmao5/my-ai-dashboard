@@ -1,5 +1,6 @@
 import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+const useSecureCookies = process.env.NEXTAUTH_URL?.startsWith("https://");
 
 const handler = NextAuth({
   providers: [
@@ -24,6 +25,22 @@ const handler = NextAuth({
   pages: {
     signIn: "/login", // 커스텀 로그인 페이지 경로
   },
+
+  // 도커 내부가 http여도, 외부 주소가 https라면 보안 쿠키를 굽도록 강제합니다.
+  cookies: {
+    sessionToken: {
+      name: useSecureCookies
+        ? "__Secure-next-auth.session-token"
+        : "next-auth.session-token",
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: useSecureCookies, // true면 무조건 https 전용 쿠키 생성
+      },
+    },
+  },
+
   callbacks: {
     async jwt({ token, user }) {
       return token;
