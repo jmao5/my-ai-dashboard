@@ -3,7 +3,11 @@ version: '3.8'
 services:
   # 1. 프론트엔드
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        NEXT_PUBLIC_AI_URL: ${NEXT_PUBLIC_AI_URL}
     container_name: dash-frontend
     # working_dir: /app  <-- (선택) Dockerfile에 있어서 없어도 됨
 
@@ -18,7 +22,7 @@ services:
     environment:
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
       - NEXT_PUBLIC_AI_URL=${NEXT_PUBLIC_AI_URL}
-      - NEXTAUTH_URL=http://sso.tplinkdns.com:9014
+      - NEXTAUTH_URL=${NEXTAUTH_URL}
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
     depends_on:

@@ -9,6 +9,13 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+
+# 👇 [추가] 빌드 시점에 변수 받기 (ARG) & 설정하기 (ENV)
+ARG NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_AI_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_AI_URL=$NEXT_PUBLIC_AI_URL
+
 # Next.js 빌드 실행 (압축된 운영용 파일 생성)
 RUN npm run build
 
