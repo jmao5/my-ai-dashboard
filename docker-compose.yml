@@ -3,15 +3,19 @@ version: '3.8'
 services:
   # 1. 프론트엔드
   frontend:
-    container_name: dash-frontend
     build: ./frontend
-    working_dir: /app
-    volumes:
-      - ./frontend:/app
+    container_name: dash-frontend
+    # working_dir: /app  <-- (선택) Dockerfile에 있어서 없어도 됨
+
+    # ❌ [삭제] 이제 소스코드를 실시간으로 연결할 필요가 없습니다.
+    # volumes:
+    #   - ./frontend:/app
+
     ports:
       - "9014:3000"
+    # ❌ [삭제] command도 지우세요 (Dockerfile CMD가 실행됨)
+    # command: sh -c "npm install && npm run dev"
     environment:
-      - WATCHPACK_POLLING=true
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
       - NEXT_PUBLIC_AI_URL=${NEXT_PUBLIC_AI_URL}
       - NEXTAUTH_URL=http://sso.tplinkdns.com:9014
@@ -26,41 +30,46 @@ services:
   backend-core:
     build: ./backend-core
     container_name: dash-core
-    working_dir: /app
+
+    # ❌ [삭제] 실행 파일이 있는 곳을 덮어쓰면 안 됩니다!
+    # volumes:
+    #   - ./backend-core:/app
+    # 👇 단, 도커 소켓은 필요하니 이것만 남기거나, volumes 자체를 다시 씁니다.
     volumes:
-      - ./backend-core:/app
-      - /var/run/docker.sock:/var/run/docker.sock # Go 서버가 호스트의 도커를 만질 수 있게 권한 부여
+      - /var/run/docker.sock:/var/run/docker.sock
+
     ports:
       - "9015:8080"
+    # ❌ [삭제]
+    # command: ...
     environment:
-      # DB 접속 정보도 변수로 처리 👇
       - DB_DSN=host=db user=${POSTGRES_USER} password=${POSTGRES_PASSWORD} dbname=${POSTGRES_DB} port=5432 sslmode=disable
       - AI_SERVICE_URL=http://backend-ai:8000
+      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL}
+      - ALERT_THRESHOLD_CPU=${ALERT_THRESHOLD_CPU}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
-      - ALERT_THRESHOLD_CPU=${ALERT_THRESHOLD_CPU}
     networks:
       - dash-net
 
-  # 3. AI 백엔드 (Python)
+  # 3. AI 백엔드 (Python) - 얘는 그대로 둡니다 (개발 모드 유지해도 됨)
   backend-ai:
     image: python:3.11-slim
     container_name: dash-ai
     working_dir: /app
+    # Python은 스크립트 언어라 수정 빈도가 높으니 Volume 유지해도 괜찮습니다.
     volumes:
       - /home/jsh/docker/my-dashboard/backend-ai:/app
     ports:
       - "9016:8000"
     command: sh -c "pip install -r requirements.txt && python main.py"
     environment:
-      # 가장 중요한 API 키! 👇
       - GEMINI_API_KEY=${GEMINI_API_KEY}
-      # DB 접속 정보
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
     networks:
       - dash-net
 
-  # 4. 데이터베이스
+  # 4. DB (유지)
   db:
     image: postgres:15-alpine
     container_name: dash-db
