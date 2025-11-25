@@ -46,8 +46,7 @@ export default function LoginPage() {
         // 성공
         console.log("Login Success! Redirecting...");
         // SPA 방식 이동 (router.push) 전에 router.refresh()로 상태 동기화
-        router.refresh();
-        router.replace("/");
+        window.location.href = "/";
       }
     } catch (err) {
       // 네트워크 에러 등 예외 처리
