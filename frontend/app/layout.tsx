@@ -1,6 +1,5 @@
 "use client";
 
-import type { Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import Link from "next/link";
@@ -11,14 +10,6 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 
 const inter = Inter({ subsets: ["latin"] });
-
-export const viewport: Viewport = {
-  themeColor: "#111827",
-  width: "device-width",
-  initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
-};
 
 export default function RootLayout({
   children,
