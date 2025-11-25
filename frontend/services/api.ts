@@ -28,6 +28,14 @@ export const systemApi = {
     );
     return response.data;
   },
+
+  // 그래프 데이터 가져오기
+  getHistory: async () => {
+    const response = await axios.get(
+      `${API_CONFIG.GO_API_URL}/api/metrics/history`,
+    );
+    return response.data;
+  },
 };
 
 // 2. Python AI 백엔드 API 함수들

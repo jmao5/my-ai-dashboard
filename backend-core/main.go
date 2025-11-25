@@ -2,26 +2,38 @@ package main
 
 import (
 	"context"
+	"database/sql" // 👈 DB 연동 패키지
 	"encoding/json"
 	"fmt"
 	"math"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
-	// 👇 [수정] 구버전 SDK 호환 패키지 경로
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
-
+	_ "github.com/lib/pq" // 👈 Postgres 드라이버 (직접 안 써도 import 필수)
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/mem"
 )
+
+// DB 연결 객체
+var db *sql.DB
 
 type SystemStats struct {
 	CPU float64 `json:"cpu"`
 	RAM float64 `json:"ram"`
 }
 
+// 이력 데이터 구조체 (DB 저장용)
+type MetricHistory struct {
+	Time string  `json:"time"`
+	CPU  float64 `json:"cpu"`
+	RAM  float64 `json:"ram"`
+}
+
+// ... (ContainerInfo, RestartRequest 구조체는 그대로 유지) ...
 type ContainerInfo struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`
@@ -33,7 +45,97 @@ type RestartRequest struct {
 	ContainerID string `json:"containerId"`
 }
 
+// DB 초기화 및 테이블 생성
+func initDB() {
+	var err error
+	dsn := os.Getenv("DB_DSN") // docker-compose.yml에서 가져옴
+	db, err = sql.Open("postgres", dsn)
+	if err != nil {
+		fmt.Println("❌ DB 연결 설정 실패:", err)
+		return
+	}
+
+	// 실제 연결 테스트 (재시도 로직)
+	for i := 0; i < 10; i++ {
+		err = db.Ping()
+		if err == nil {
+			fmt.Println("✅ DB 연결 성공!")
+			break
+		}
+		fmt.Println("⏳ DB 연결 대기 중...", err)
+		time.Sleep(2 * time.Second)
+	}
+
+	// 테이블 생성 (없으면 만듦)
+	query := `
+	CREATE TABLE IF NOT EXISTS system_metrics (
+		id SERIAL PRIMARY KEY,
+		cpu REAL,
+		ram REAL,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);`
+	_, err = db.Exec(query)
+	if err != nil {
+		fmt.Println("❌ 테이블 생성 실패:", err)
+	}
+}
+
+// 백그라운드 작업: 5초마다 데이터 저장
+func startMetricsRecorder() {
+	ticker := time.NewTicker(5 * time.Second)
+	go func() {
+		for range ticker.C {
+			// 현재 상태 측정
+			cpuPercent, _ := cpu.Percent(time.Second, false)
+			vMem, _ := mem.VirtualMemory()
+
+			cpuVal := 0.0
+			if len(cpuPercent) > 0 {
+				cpuVal = math.Round(cpuPercent[0]*100) / 100
+			}
+			ramVal := math.Round(vMem.UsedPercent*100) / 100
+
+			// DB 저장
+			if db != nil {
+				_, err := db.Exec("INSERT INTO system_metrics (cpu, ram) VALUES ($1, $2)", cpuVal, ramVal)
+				if err != nil {
+					fmt.Println("⚠️ 데이터 저장 실패:", err)
+				}
+			}
+		}
+	}()
+}
+
+// API: 최근 데이터 조회
+func getMetricsHistory(w http.ResponseWriter, r *http.Request) {
+	// 최근 20개 데이터만 가져오기 (시간순 정렬)
+	rows, err := db.Query("SELECT to_char(created_at, 'HH24:MI:SS'), cpu, ram FROM system_metrics ORDER BY created_at DESC LIMIT 20")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var history []MetricHistory
+	for rows.Next() {
+		var m MetricHistory
+		rows.Scan(&m.Time, &m.CPU, &m.RAM)
+		history = append(history, m)
+	}
+
+	// DB에서는 최신순(DESC)으로 가져왔으니, 그래프를 위해 시간순(과거->현재)으로 뒤집기
+	for i, j := 0, len(history)-1; i < j; i, j = i+1, j-1 {
+		history[i], history[j] = history[j], history[i]
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(history)
+}
+
+// ... (기존 enableCORS, getSystemStats, getContainers, restartContainer 함수는 그대로 유지!) ...
+// (여기에 기존 함수들을 그대로 두시면 됩니다. 아래는 중복 생략을 위해 함수명만 적습니다)
 func enableCORS(next http.HandlerFunc) http.HandlerFunc {
+	// 기존 코드 그대로...
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
@@ -48,6 +150,7 @@ func enableCORS(next http.HandlerFunc) http.HandlerFunc {
 }
 
 func getSystemStats(w http.ResponseWriter, r *http.Request) {
+	// 기존 코드 그대로...
 	cpuPercent, _ := cpu.Percent(time.Second, false)
 	vMem, _ := mem.VirtualMemory()
 
@@ -63,93 +166,103 @@ func getSystemStats(w http.ResponseWriter, r *http.Request) {
 }
 
 func getContainers(w http.ResponseWriter, r *http.Request) {
+	// 기존 코드 그대로...
 	ctx := context.Background()
-
-	// 클라이언트 생성
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
-	// 👇 [수정] 구버전 SDK용 ListOptions 사용 (types.ContainerListOptions)
 	containers, err := cli.ContainerList(ctx, types.ContainerListOptions{All: true})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
 	var results []ContainerInfo
 	for _, ctr := range containers {
-		// 이름이 없는 경우 방지
 		if len(ctr.Names) == 0 {
 			continue
 		}
 		name := strings.TrimPrefix(ctr.Names[0], "/")
-		// 우리 프로젝트 컨테이너만 필터링
 		if strings.Contains(name, "dash") {
 			results = append(results, ContainerInfo{
-				ID:     ctr.ID,
-				Name:   name,
-				State:  ctr.State,
-				Status: ctr.Status,
+				ID: ctr.ID, Name: name, State: ctr.State, Status: ctr.Status,
 			})
 		}
 	}
-
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(results)
 }
 
 func restartContainer(w http.ResponseWriter, r *http.Request) {
+	// 기존 코드 그대로... (고루틴 버전)
 	if r.Method != "POST" {
 		http.Error(w, "Only POST allowed", http.StatusMethodNotAllowed)
 		return
 	}
-
 	var req RestartRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
-	// 1. 클라이언트에게 먼저 "알겠어!"라고 응답을 보냅니다. (성공 메시지)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
 		"message": "Restart command received. Restarting in 1 second...",
 	})
-
-	// 응답이 확실히 전송되도록 플러시(Flush) - 선택사항이지만 안전함
 	if f, ok := w.(http.Flusher); ok {
 		f.Flush()
 	}
-
-	// 2. 별도의 고루틴(백그라운드)에서 1초 뒤에 재시작을 실행합니다.
-	// (메인 스레드는 이미 응답을 보내고 끝났으므로 에러가 안 남)
 	go func(targetID string) {
-		// 1초 대기 (응답이 날아갈 시간 벌어주기)
 		time.Sleep(1 * time.Second)
-
 		ctx := context.Background()
 		cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 		if err != nil {
-			fmt.Printf("Error creating client: %v\n", err)
 			return
 		}
-
-		fmt.Printf("♻️ Restarting container: %s\n", targetID)
-		// 재시작 실행
-		err = cli.ContainerRestart(ctx, targetID, nil)
-		if err != nil {
-			fmt.Printf("❌ Failed to restart container %s: %v\n", targetID, err)
-		}
+		cli.ContainerRestart(ctx, targetID, nil)
 	}(req.ContainerID)
 }
 
+// 청소부 함수: 1시간마다 실행되어, 24시간 지난 데이터 삭제
+func startCleanupRoutine() {
+	// 1시간 간격 타이머
+	ticker := time.NewTicker(1 * time.Hour)
+
+	go func() {
+		for range ticker.C {
+			fmt.Println("🧹 DB 청소 시작: 24시간 지난 데이터 삭제 중...")
+
+			// PostgreSQL 문법: 현재시간(NOW)에서 1일(INTERVAL '1 day') 뺀 것보다 오래된(<) 데이터 삭제
+			query := "DELETE FROM system_metrics WHERE created_at < NOW() - INTERVAL '1 day'"
+
+			result, err := db.Exec(query)
+			if err != nil {
+				fmt.Printf("⚠️ 데이터 삭제 실패: %v\n", err)
+			} else {
+				rowsAffected, _ := result.RowsAffected()
+				fmt.Printf("✅ 청소 완료: 오래된 데이터 %d개 삭제됨\n", rowsAffected)
+			}
+		}
+	}()
+}
+
 func main() {
+	// 1. DB 연결
+	initDB()
+
+	// 2. 기록 시작 (5초마다)
+	startMetricsRecorder()
+
+	// 3. 청소부 투입 (1시간마다)
+	startCleanupRoutine()
+
+	// 2. 라우터 설정
 	http.HandleFunc("/api/status", enableCORS(getSystemStats))
 	http.HandleFunc("/api/docker/list", enableCORS(getContainers))
 	http.HandleFunc("/api/docker/restart", enableCORS(restartContainer))
+
+	// 이력 조회 API
+	http.HandleFunc("/api/metrics/history", enableCORS(getMetricsHistory))
 
 	fmt.Println("🚀 Go Backend Server running on port 8080")
 	if err := http.ListenAndServe(":8080", nil); err != nil {

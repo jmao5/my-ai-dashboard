@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { systemApi, aiApi } from "@/services/api";
+import SystemChart from "@/components/SystemChart";
 
 export default function Home() {
   const queryClient = useQueryClient();
@@ -51,7 +52,7 @@ export default function Home() {
     <div className="space-y-8">
       {" "}
       {/* 세로 간격 추가 */}
-      {/* --- 상단 위젯 영역 (기존 코드) --- */}
+      {/* 1. 상단 위젯 (CPU, AI, Link) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* 카드 1: 시스템 상태 */}
         <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg">
@@ -117,7 +118,9 @@ export default function Home() {
           </ul>
         </div>
       </div>
-      {/* --- 하단: 도커 관리 패널 (New!) --- */}
+      {/* 2. 차트 영역 */}
+      <SystemChart />
+      {/* 3. 하단 도커 관리 패널 */}
       <div className="bg-gray-800 rounded-xl border border-gray-700 shadow-lg overflow-hidden">
         <div className="p-4 border-b border-gray-700 flex justify-between items-center">
           <h3 className="text-lg font-bold text-white">
