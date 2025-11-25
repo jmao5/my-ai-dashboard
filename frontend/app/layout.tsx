@@ -3,6 +3,8 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import Link from "next/link";
 import QueryProvider from "@/providers/QueryProvider";
+import SessionProvider from "@/providers/SessionProvider";
+import UserMenu from "@/components/UserMenu";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -19,70 +21,67 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <body className={inter.className}>
-        <QueryProvider>
-          <div className="flex h-screen bg-gray-900 text-white font-sans overflow-hidden">
-            {/* 1. 왼쪽 사이드바 */}
-            <aside className="w-64 bg-gray-800 flex flex-col border-r border-gray-700">
-              {/* 로고 영역 */}
-              <div className="h-16 flex items-center justify-center border-b border-gray-700">
-                <h1 className="text-xl font-bold text-blue-400">
-                  🚀 My Dashboard
-                </h1>
-              </div>
-
-              {/* 메뉴 목록 */}
-              <nav className="flex-1 p-4 space-y-2">
-                <Link
-                  href="/"
-                  className="block px-4 py-2 rounded hover:bg-gray-700 transition flex items-center gap-2"
-                >
-                  📊 <span>홈 (Dashboard)</span>
-                </Link>
-                <Link
-                  href="/ai"
-                  className="block px-4 py-2 rounded hover:bg-gray-700 transition flex items-center gap-2"
-                >
-                  🤖 <span>AI 챗봇</span>
-                </Link>
-                <Link
-                  href="/logs"
-                  className="block px-4 py-2 rounded hover:bg-gray-700 transition flex items-center gap-2"
-                >
-                  📝 <span>시스템 로그</span>
-                </Link>
-                <Link
-                  href="/settings"
-                  className="block px-4 py-2 rounded hover:bg-gray-700 transition flex items-center gap-2"
-                >
-                  ⚙️ <span>설정</span>
-                </Link>
-              </nav>
-
-              {/* 하단 상태 표시 */}
-              <div className="p-4 border-t border-gray-700 text-sm text-gray-400">
-                Server Status:{" "}
-                <span className="text-green-400 font-bold">Online ●</span>
-              </div>
-            </aside>
-
-            {/* 2. 오른쪽 메인 콘텐츠 영역 */}
-            <main className="flex-1 flex flex-col overflow-y-auto">
-              {/* 상단 헤더 */}
-              <header className="h-16 bg-gray-800 border-b border-gray-700 flex items-center justify-between px-8 shrink-0">
-                <h2 className="text-lg font-semibold">Dashboard Overview</h2>
-                <div className="flex items-center space-x-4">
-                  <span className="text-sm text-gray-300">
-                    Admin 님 환영합니다
-                  </span>
-                  <div className="w-8 h-8 bg-gradient-to-tr from-blue-500 to-purple-500 rounded-full"></div>
+        <SessionProvider>
+          <QueryProvider>
+            <div className="flex h-screen bg-gray-900 text-white font-sans overflow-hidden">
+              {/* 1. 왼쪽 사이드바 */}
+              <aside className="w-64 bg-gray-800 flex flex-col border-r border-gray-700">
+                {/* 로고 영역 */}
+                <div className="h-16 flex items-center justify-center border-b border-gray-700">
+                  <h1 className="text-xl font-bold text-blue-400">
+                    🚀 My Dashboard
+                  </h1>
                 </div>
-              </header>
 
-              {/* 실제 페이지 내용이 들어가는 곳 */}
-              <div className="p-8">{children}</div>
-            </main>
-          </div>
-        </QueryProvider>
+                {/* 메뉴 목록 */}
+                <nav className="flex-1 p-4 space-y-2">
+                  <Link
+                    href="/"
+                    className="block px-4 py-2 rounded hover:bg-gray-700 transition flex items-center gap-2"
+                  >
+                    📊 <span>홈 (Dashboard)</span>
+                  </Link>
+                  <Link
+                    href="/ai"
+                    className="block px-4 py-2 rounded hover:bg-gray-700 transition flex items-center gap-2"
+                  >
+                    🤖 <span>AI 챗봇</span>
+                  </Link>
+                  <Link
+                    href="/logs"
+                    className="block px-4 py-2 rounded hover:bg-gray-700 transition flex items-center gap-2"
+                  >
+                    📝 <span>시스템 로그</span>
+                  </Link>
+                  <Link
+                    href="/settings"
+                    className="block px-4 py-2 rounded hover:bg-gray-700 transition flex items-center gap-2"
+                  >
+                    ⚙️ <span>설정</span>
+                  </Link>
+                </nav>
+
+                {/* 하단 상태 표시 */}
+                <div className="p-4 border-t border-gray-700 text-sm text-gray-400">
+                  Server Status:{" "}
+                  <span className="text-green-400 font-bold">Online ●</span>
+                </div>
+              </aside>
+
+              {/* 2. 오른쪽 메인 콘텐츠 영역 */}
+              <main className="flex-1 flex flex-col overflow-y-auto">
+                {/* 상단 헤더 */}
+                <header className="h-16 bg-gray-800 border-b border-gray-700 flex items-center justify-between px-8 shrink-0">
+                  <h2 className="text-lg font-semibold">Dashboard Overview</h2>
+                  <UserMenu />
+                </header>
+
+                {/* 실제 페이지 내용이 들어가는 곳 */}
+                <div className="p-8">{children}</div>
+              </main>
+            </div>
+          </QueryProvider>
+        </SessionProvider>
       </body>
     </html>
   );
