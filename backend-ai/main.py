@@ -5,7 +5,11 @@ from sqlalchemy.orm import Session
 import database
 import os
 import google.generativeai as genai
-
+# 👇 [여기서부터 추가된 부분] 👇
+import yfinance as yf
+from apscheduler.schedulers.background import BackgroundScheduler
+import requests
+from datetime import datetime, timedelta
 # 1. DB 초기화
 database.Base.metadata.create_all(bind=database.engine)
 
