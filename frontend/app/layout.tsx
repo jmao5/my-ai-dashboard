@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import Link from "next/link";
@@ -8,9 +8,21 @@ import UserMenu from "@/components/UserMenu";
 
 const inter = Inter({ subsets: ["latin"] });
 
+export const viewport: Viewport = {
+  themeColor: "#111827",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+};
+
 export const metadata: Metadata = {
   title: "My AI Dashboard",
-  description: "Next.js로 만든 개인 대시보드",
+  description: "Personal Server Control Center",
+  manifest: "/manifest.json", // 👈 매니페스트 연결
+  icons: {
+    apple: "/icon.png", // 아이폰용 아이콘
+  },
 };
 
 export default function RootLayout({
