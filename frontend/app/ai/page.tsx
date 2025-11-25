@@ -1,27 +1,33 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"; // DB 연동 필수 훅
+import { useState, useRef, useEffect, ChangeEvent } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { aiApi } from "@/services/api";
-import ReactMarkdown from "react-markdown"; // 마크다운
+import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 export default function AiChatPage() {
   const [input, setInput] = useState("");
+
+  // 파일 업로드 알림 메시지를 잠깐 보여주기 위한 로컬 상태
+  // (DB에는 저장 안 되고 화면에만 잠시 뜸)
+  const [localSystemMsg, setLocalSystemMsg] = useState<string | null>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null); // 파일 선택창 제어용
   const queryClient = useQueryClient();
 
-  // ✅ 1. DB에서 채팅 기록 불러오기 (부활!)
+  // ✅ 1. DB에서 채팅 기록 불러오기 (실시간 동기화)
   const { data: history = [], isLoading: isHistoryLoading } = useQuery({
     queryKey: ["chatHistory"],
     queryFn: aiApi.getHistory,
-    // 데이터가 없을 때 안내 문구 추가
     select: (data) => {
+      // 데이터가 비어있으면 안내 메시지 추가
       if (!data || data.length === 0) {
         return [
           {
             role: "bot",
-            text: "안녕하세요! 저는 기억력이 있는 **Gemini AI**입니다. \n\n무엇을 도와드릴까요?",
+            text: "안녕하세요! 저는 문서를 읽고 대화할 수 있는 **Gemini AI**입니다. \n\n📎 버튼을 눌러 파일을 업로드해보세요!",
           },
         ];
       }
@@ -33,34 +39,59 @@ export default function AiChatPage() {
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
-  useEffect(scrollToBottom, [history]); // 기록이 로드되거나 갱신되면 스크롤
 
-  // ✅ 2. 메시지 전송 (DB 저장 및 목록 갱신)
+  // 메시지가 오거나 로컬 알림이 뜨면 스크롤 내림
+  useEffect(scrollToBottom, [history, localSystemMsg]);
+
+  // ✅ 2. 메시지 전송 Mutation
   const sendMessageMutation = useMutation({
     mutationFn: (message: string) => aiApi.sendMessage(message),
-    onSuccess: (data) => {
-      // 전송 성공 시 'chatHistory'를 상하게 만들어서(invalidate) 다시 받아오게 함
+    onSuccess: () => {
+      // 전송 성공 -> DB 목록 새로고침
       queryClient.invalidateQueries({ queryKey: ["chatHistory"] });
     },
     onError: (error) => {
       console.error("Chat Error:", error);
-      alert("서버 연결 실패!");
+      alert("메시지 전송 실패!");
     },
   });
 
+  // ✅ 3. 파일 업로드 Mutation (RAG)
+  const uploadMutation = useMutation({
+    mutationFn: aiApi.uploadFile,
+    onSuccess: (data) => {
+      // 성공 시 시스템 메시지 표시
+      setLocalSystemMsg(`📂 ${data.message}\n(내용 미리보기: ${data.preview})`);
+      // 3초 뒤에 알림 메시지 끄기
+      setTimeout(() => setLocalSystemMsg(null), 5000);
+    },
+    onError: () =>
+      alert("업로드 실패! 텍스트 파일(.txt, .md, .log 등)만 가능합니다."),
+  });
+
+  // 텍스트 전송 핸들러
   const handleSendMessage = () => {
     if (!input.trim()) return;
-
-    // 일단 서버로 보냄 (화면 갱신은 DB가 처리)
     sendMessageMutation.mutate(input);
     setInput("");
+  };
+
+  // 파일 선택 핸들러
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      uploadMutation.mutate(e.target.files[0]);
+    }
+    // 같은 파일을 다시 선택할 수 있게 input 초기화
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
 
   const isLoading = sendMessageMutation.isPending;
 
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)] bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
-      {/* 헤더 */}
+      {/* 1. 헤더 */}
       <div className="bg-gray-900 p-4 border-b border-gray-700 flex justify-between items-center">
         <h2 className="text-lg font-bold text-white flex items-center gap-2">
           🤖 AI Assistant
@@ -68,18 +99,18 @@ export default function AiChatPage() {
         <div className="flex items-center gap-2">
           {isHistoryLoading && (
             <span className="text-xs text-yellow-500 animate-pulse">
-              Loading...
+              Syncing...
             </span>
           )}
           <span className="text-xs text-green-400 border border-green-400 px-2 py-0.5 rounded-full">
-            DB Connected
+            RAG Ready
           </span>
         </div>
       </div>
 
-      {/* 메시지 영역 */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {/* ✅ history 데이터를 화면에 뿌림 (messages 상태 대신 사용) */}
+      {/* 2. 메시지 영역 */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+        {/* (A) DB에서 가져온 대화 기록 */}
         {history.map((msg: any, idx: number) => (
           <div
             key={idx}
@@ -92,7 +123,6 @@ export default function AiChatPage() {
                   : "bg-gray-700 text-gray-200 rounded-tl-none"
               }`}
             >
-              {/* ✅ 마크다운 적용 */}
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 components={{
@@ -144,20 +174,51 @@ export default function AiChatPage() {
           </div>
         ))}
 
-        {/* 로딩 표시 */}
-        {isLoading && (
+        {/* (B) 파일 업로드 알림 (임시 표시) */}
+        {localSystemMsg && (
+          <div className="flex justify-center">
+            <div className="bg-gray-600/50 text-gray-300 text-xs px-3 py-1 rounded-full animate-fade-in">
+              {localSystemMsg}
+            </div>
+          </div>
+        )}
+
+        {/* (C) 로딩 인디케이터 */}
+        {(isLoading || uploadMutation.isPending) && (
           <div className="flex justify-start">
-            <div className="bg-gray-700 px-4 py-2 rounded-lg rounded-tl-none text-gray-400 text-sm animate-pulse">
-              Gemini가 생각 중입니다... 🧠
+            <div className="bg-gray-700 px-4 py-2 rounded-lg rounded-tl-none text-gray-400 text-sm animate-pulse flex items-center gap-2">
+              {uploadMutation.isPending
+                ? "📂 문서를 읽는 중..."
+                : "🧠 Gemini가 생각 중..."}
             </div>
           </div>
         )}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* 입력창 */}
+      {/* 3. 입력창 영역 */}
       <div className="p-4 bg-gray-900 border-t border-gray-700">
+        {/* 숨겨진 파일 인풋 */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileChange}
+          className="hidden"
+          accept=".txt,.md,.csv,.log,.json,.conf,.py,.js,.go" // 허용할 확장자들
+        />
+
         <div className="flex gap-2">
+          {/* 파일 업로드 버튼 */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploadMutation.isPending || isLoading}
+            className="bg-gray-700 hover:bg-gray-600 text-gray-300 px-3 rounded-lg border border-gray-600 transition flex items-center justify-center disabled:opacity-50"
+            title="문서 업로드 (RAG)"
+          >
+            {uploadMutation.isPending ? "⏳" : "📎"}
+          </button>
+
+          {/* 텍스트 입력창 */}
           <input
             type="text"
             className="flex-1 bg-gray-800 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500 transition disabled:opacity-50"
@@ -167,6 +228,8 @@ export default function AiChatPage() {
             onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
             disabled={isLoading}
           />
+
+          {/* 전송 버튼 */}
           <button
             onClick={handleSendMessage}
             disabled={isLoading}

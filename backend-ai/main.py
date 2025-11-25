@@ -72,12 +72,29 @@ def get_chat_history(db: Session = Depends(get_db)):
     # 파이썬 리스트 뒤집기 ([::-1]) -> 과거부터 현재 순서로
     return [{"role": h.role, "text": h.message} for h in history[::-1]]
 
-# 3. 핵심: 채팅 API (기억력 추가됨)
+@app.post("/api/upload")
+async def upload_document(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    try:
+        # 파일 내용 읽기 (텍스트 파일이라고 가정)
+        content = await file.read()
+        text_content = content.decode("utf-8")
+
+        # DB에 저장
+        db_doc = database.Document(filename=file.filename, content=text_content)
+        db.add(db_doc)
+        db.commit()
+
+        return {"message": f"파일 '{file.filename}' 학습 완료!", "preview": text_content[:100] + "..."}
+    except Exception as e:
+        print(f"Upload Error: {e}")
+        raise HTTPException(status_code=400, detail="파일을 읽을 수 없습니다. 텍스트(.txt, .md, .conf) 파일만 가능합니다.")
+
+# 👇 [수정] 채팅 API (지식 참조 기능 추가)
 @app.post("/api/chat")
 async def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
     user_msg = request.message
 
-    # (1) 유저 메시지 먼저 DB 저장 (기록용)
+    # 1. 유저 메시지 DB 저장
     db_user_msg = database.ChatHistory(role="user", message=user_msg)
     db.add(db_user_msg)
     db.commit()
@@ -86,46 +103,48 @@ async def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
 
     try:
         if not GOOGLE_API_KEY or not model:
-            ai_response = "API 키가 없거나 모델 로딩에 실패했습니다."
+            ai_response = "시스템 오류: AI 모델이 없습니다."
         else:
-            # === 🔥 여기가 수정된 부분입니다 (기억력 주입) ===
+            # === 🧠 RAG 핵심 로직 ===
+            # 가장 최근에 업로드된 문서를 가져옵니다 (간이 RAG)
+            # 나중에는 Vector DB를 써서 관련된 것만 가져올 수 있습니다.
+            latest_doc = db.query(database.Document).order_by(database.Document.id.desc()).first()
 
-            # 1. DB에서 최근 대화 내역 가져오기 (최근 10개 정도가 적당)
-            # 너무 많이 가져오면 토큰 비용이 들거나 느려질 수 있음
+            context_prompt = ""
+            if latest_doc:
+                context_prompt = f"""
+                [Reference Document: {latest_doc.filename}]
+                {latest_doc.content}
+                -----------------------------------
+                위 문서를 참고하여 아래 사용자의 질문에 답변해 주세요.
+                사용자 질문: {user_msg}
+                """
+            else:
+                context_prompt = user_msg # 문서가 없으면 그냥 질문만
+            # =========================
+
+            # 대화 기록 가져오기 (기존 로직 유지)
             recent_history = db.query(database.ChatHistory) \
                 .order_by(database.ChatHistory.id.desc()) \
-                .limit(10) \
-                .all()
+                .limit(10).all()
 
-            # 2. Gemini가 이해하는 형식으로 변환 (List[dict])
-            # DB에서 가져온 건 최신순이므로 다시 뒤집어서(reversed) 시간순으로 만듦
             gemini_history = []
             for msg in reversed(recent_history):
-                # 우리 DB의 role: 'user', 'bot'
-                # Gemini의 role: 'user', 'model'
                 role = "user" if msg.role == "user" else "model"
-
-                # 방금 저장한 유저 메시지는 제외 (send_message할 때 보낼 거니까)
-                # 하지만 DB에는 이미 저장했으므로, DB ID가 현재 저장한 것보다 작은 것만 가져오거나
-                # 간단하게는 그냥 content만 리스트로 만듭니다.
-                if msg.message == user_msg and msg.role == 'user':
-                    continue
-
+                if msg.message == user_msg and msg.role == 'user': continue
                 gemini_history.append({"role": role, "parts": [msg.message]})
 
-            # 3. 과거 기록을 담아서 채팅 세션 시작
             chat_session = model.start_chat(history=gemini_history)
 
-            # 4. 질문 전송
-            response = chat_session.send_message(user_msg)
+            # 질문 전송 (문서 내용이 포함된 프롬프트 전송)
+            response = chat_session.send_message(context_prompt)
             ai_response = response.text
-            # ================================================
 
     except Exception as e:
-        ai_response = f"에러 발생: {str(e)}"
+        ai_response = f"Error: {str(e)}"
         print(f"Gemini Error: {e}")
 
-    # (3) AI 답변 DB 저장
+    # AI 답변 저장
     db_ai_msg = database.ChatHistory(role="bot", message=ai_response)
     db.add(db_ai_msg)
     db.commit()

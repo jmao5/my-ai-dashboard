@@ -87,4 +87,21 @@ export const aiApi = {
     );
     return response.data;
   },
+
+  // 파일 업로드
+  uploadFile: async (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await axios.post(
+      `${API_CONFIG.AI_API_URL}/api/upload`,
+      formData,
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      },
+    );
+    return response.data;
+  },
 };

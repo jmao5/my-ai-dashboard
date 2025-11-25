@@ -28,3 +28,11 @@ class ChatHistory(Base):
     role = Column(String) # 'user' 또는 'bot'
     message = Column(String)
     timestamp = Column(DateTime, default=datetime.utcnow)
+
+class Document(Base):
+    __tablename__ = "documents"
+
+    id = Column(Integer, primary_key=True, index=True)
+    filename = Column(String)
+    content = Column(String) # 파일의 텍스트 내용
+    timestamp = Column(DateTime, default=datetime.utcnow)
