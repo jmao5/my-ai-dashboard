@@ -105,3 +105,33 @@ export const aiApi = {
     return response.data;
   },
 };
+
+// ... 기존 코드 ...
+
+export const marketApi = {
+  // 차트 데이터
+  getHistory: async () => {
+    const response = await axios.get(
+      `${API_CONFIG.AI_API_URL}/api/market/history`,
+    );
+    return response.data;
+  },
+  // 설정 가져오기
+  getSetting: async () => {
+    const response = await axios.get(
+      `${API_CONFIG.AI_API_URL}/api/market/setting`,
+    );
+    return response.data;
+  },
+  // 설정 저장하기
+  updateSetting: async (threshold: number, is_active: boolean) => {
+    const response = await axios.post(
+      `${API_CONFIG.AI_API_URL}/api/market/setting`,
+      {
+        threshold,
+        is_active,
+      },
+    );
+    return response.data;
+  },
+};

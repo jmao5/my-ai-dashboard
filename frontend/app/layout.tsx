@@ -84,6 +84,13 @@ export default function RootLayout({
                       📝 <span>시스템 로그</span>
                     </Link>
                     <Link
+                      href="/nasdaq"
+                      onClick={() => setIsSidebarOpen(false)}
+                      className="block px-4 py-2 rounded hover:bg-gray-700 transition flex items-center gap-2"
+                    >
+                      📈 <span>나스닥 관제</span>
+                    </Link>
+                    <Link
                       href="/settings"
                       onClick={() => setIsSidebarOpen(false)}
                       className="block px-4 py-2 rounded hover:bg-gray-700 transition flex items-center gap-2"

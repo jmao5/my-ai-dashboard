@@ -3,14 +3,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { systemApi } from "@/services/api";
 import {
-  LineChart,
+  CartesianGrid,
   Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
 } from "recharts";
 
 export default function SystemChart() {
