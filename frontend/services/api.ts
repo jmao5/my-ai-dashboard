@@ -48,6 +48,10 @@ export const systemApi = {
     );
     return response.data;
   },
+
+  triggerStress: async () => {
+    await axios.post(`${API_CONFIG.GO_API_URL}/api/debug/stress`);
+  },
 };
 
 // 2. Python AI 백엔드 API 함수들

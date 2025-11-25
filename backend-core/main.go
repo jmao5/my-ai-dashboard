@@ -1,7 +1,7 @@
 package main
 
 import (
-	"bytes"
+	"bytes" // 👈 추가
 	_ "bytes"
 	"context"
 	"database/sql" // 👈 DB 연동 패키지
@@ -10,6 +10,8 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"strconv"
+	_ "strconv" // 👈 추가
 	"strings"
 	"time"
 
@@ -48,6 +50,13 @@ type RestartRequest struct {
 	ContainerID string `json:"containerId"`
 }
 
+var (
+	telegramBotToken string // 👈 변경
+	telegramChatID   string // 👈 변경
+	alertThreshold   float64
+	lastAlertTime    time.Time
+)
+
 // DB 초기화 및 테이블 생성
 func initDB() {
 	var err error
@@ -81,32 +90,6 @@ func initDB() {
 	if err != nil {
 		fmt.Println("❌ 테이블 생성 실패:", err)
 	}
-}
-
-// 백그라운드 작업: 5초마다 데이터 저장
-func startMetricsRecorder() {
-	ticker := time.NewTicker(5 * time.Second)
-	go func() {
-		for range ticker.C {
-			// 현재 상태 측정
-			cpuPercent, _ := cpu.Percent(time.Second, false)
-			vMem, _ := mem.VirtualMemory()
-
-			cpuVal := 0.0
-			if len(cpuPercent) > 0 {
-				cpuVal = math.Round(cpuPercent[0]*100) / 100
-			}
-			ramVal := math.Round(vMem.UsedPercent*100) / 100
-
-			// DB 저장
-			if db != nil {
-				_, err := db.Exec("INSERT INTO system_metrics (cpu, ram) VALUES ($1, $2)", cpuVal, ramVal)
-				if err != nil {
-					fmt.Println("⚠️ 데이터 저장 실패:", err)
-				}
-			}
-		}
-	}()
 }
 
 // API: 최근 데이터 조회
@@ -291,6 +274,92 @@ func startCleanupRoutine() {
 	}()
 }
 
+func sendTelegramAlert(cpuVal, ramVal float64) {
+	// 1. 쿨타임 체크 (10분)
+	if time.Since(lastAlertTime) < 10*time.Minute {
+		return
+	}
+
+	if telegramBotToken == "" || telegramChatID == "" {
+		return
+	}
+
+	// 2. 메시지 내용 작성 (HTML 모드 사용 가능)
+	messageText := fmt.Sprintf("🚨 <b>경고: 서버 부하 발생!</b>\n\n⚠️ <b>CPU:</b> %.2f%%\n⚠️ <b>RAM:</b> %.2f%%\n\n즉시 확인이 필요합니다!", cpuVal, ramVal)
+
+	// 3. JSON 데이터 생성
+	reqBody, _ := json.Marshal(map[string]string{
+		"chat_id":    telegramChatID,
+		"text":       messageText,
+		"parse_mode": "HTML", // 굵은 글씨 등을 위해 HTML 모드 사용
+	})
+
+	// 4. 전송 (Telegram API)
+	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", telegramBotToken)
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(reqBody))
+
+	if err != nil {
+		fmt.Println("❌ 텔레그램 전송 실패:", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	fmt.Println("🔔 텔레그램 알림 전송 완료!")
+	lastAlertTime = time.Now()
+}
+
+// startMetricsRecorder 함수 수정
+func startMetricsRecorder() {
+	// 👇 [수정] 환경 변수 로드 변경
+	telegramBotToken = os.Getenv("TELEGRAM_BOT_TOKEN")
+	telegramChatID = os.Getenv("TELEGRAM_CHAT_ID")
+
+	thresholdStr := os.Getenv("ALERT_THRESHOLD_CPU")
+	if val, err := strconv.ParseFloat(thresholdStr, 64); err == nil {
+		alertThreshold = val
+	} else {
+		alertThreshold = 80.0
+	}
+
+	ticker := time.NewTicker(5 * time.Second)
+	go func() {
+		for range ticker.C {
+			cpuPercent, _ := cpu.Percent(time.Second, false)
+			vMem, _ := mem.VirtualMemory()
+
+			cpuVal := 0.0
+			if len(cpuPercent) > 0 {
+				cpuVal = math.Round(cpuPercent[0]*100) / 100
+			}
+			ramVal := math.Round(vMem.UsedPercent*100) / 100
+
+			// 👇 [수정] 함수 호출 변경
+			if cpuVal >= alertThreshold {
+				sendTelegramAlert(cpuVal, ramVal)
+			}
+
+			if db != nil {
+				db.Exec("INSERT INTO system_metrics (cpu, ram) VALUES ($1, $2)", cpuVal, ramVal)
+			}
+		}
+	}()
+}
+
+func triggerStress(w http.ResponseWriter, r *http.Request) {
+	go func() {
+		fmt.Println("🔥 스트레스 테스트 시작!")
+		end := time.Now().Add(5 * time.Second)
+		for time.Now().Before(end) {
+			// CPU를 태우는 무의미한 연산
+			_ = math.Sqrt(float64(time.Now().UnixNano()))
+		}
+		fmt.Println("✅ 스트레스 테스트 종료")
+	}()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"message": "CPU stress test started (5s)"})
+}
+
 func main() {
 	// 1. DB 연결
 	initDB()
@@ -311,6 +380,8 @@ func main() {
 
 	// 이력 조회 API
 	http.HandleFunc("/api/metrics/history", enableCORS(getMetricsHistory))
+
+	http.HandleFunc("/api/debug/stress", enableCORS(triggerStress))
 
 	fmt.Println("🚀 Go Backend Server running on port 8080")
 	if err := http.ListenAndServe(":8080", nil); err != nil {

@@ -2,32 +2,33 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { systemApi, aiApi } from "@/services/api";
-import SystemChart from "@/components/SystemChart";
+import SystemChart from "@/components/SystemChart"; // 차트 컴포넌트
 
 export default function Home() {
   const queryClient = useQueryClient();
 
-  // 기존 쿼리들...
+  // 1. 시스템 상태 (2초마다 갱신)
   const { data: stats } = useQuery({
     queryKey: ["systemStatus"],
     queryFn: systemApi.getStatus,
-    refetchInterval: 10000,
+    refetchInterval: 2000,
   });
 
+  // 2. AI 상태 (5초마다 갱신)
   const { data: aiData } = useQuery({
     queryKey: ["aiStatus"],
     queryFn: aiApi.getStatus,
-    refetchInterval: 30000, // AI 상태는 좀 천천히
+    refetchInterval: 5000,
   });
 
-  // 👇 1. 도커 컨테이너 목록 쿼리 (3초마다 갱신)
+  // 3. 도커 컨테이너 목록 (3초마다 갱신)
   const { data: containers = [] } = useQuery({
     queryKey: ["dockerContainers"],
     queryFn: systemApi.getContainers,
-    refetchInterval: 20000,
+    refetchInterval: 3000,
   });
 
-  // 👇 2. 재시작 Mutation
+  // 4. 컨테이너 재시작 Mutation
   const restartMutation = useMutation({
     mutationFn: systemApi.restartContainer,
     onSuccess: () => {
@@ -45,38 +46,65 @@ export default function Home() {
     }
   };
 
+  // 👇 5. [추가] 스트레스 테스트 버튼 핸들러
+  const handleStressTest = async () => {
+    if (
+      confirm("⚠️ 주의: 5초간 CPU 부하를 유발하여 알림을 테스트하시겠습니까?")
+    ) {
+      try {
+        await systemApi.triggerStress();
+        alert("🔥 부하 테스트 시작! 텔레그램을 확인하세요.");
+      } catch (error) {
+        console.error(error);
+        alert("요청 실패");
+      }
+    }
+  };
+
+  // 데이터 안전 가드
   const safeStats = stats || { cpu: 0, ram: 0 };
   const safeAiData = aiData || { status: "Check", message: "상태 확인 중..." };
 
   return (
     <div className="space-y-8">
-      {" "}
-      {/* 세로 간격 추가 */}
-      {/* 1. 상단 위젯 (CPU, AI, Link) */}
+      {/* --- 상단 위젯 영역 --- */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {/* 카드 1: 시스템 상태 */}
+        {/* 카드 1: 시스템 상태 & 테스트 버튼 */}
         <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg">
-          {/* ... 기존 내용 (CPU/RAM) ... */}
-          <h3 className="text-gray-400 text-sm font-medium mb-2">
-            System Health
-          </h3>
-          <div className="flex items-end space-x-2">
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="text-gray-400 text-sm font-medium">System Health</h3>
+            {/* 👇 여기에 테스트 버튼 추가! */}
+            <button
+              onClick={handleStressTest}
+              className="bg-red-600 hover:bg-red-700 text-white text-xs px-2 py-1 rounded transition animate-pulse"
+              title="알림 시스템 테스트용 CPU 부하 유발"
+            >
+              🔥 알림 테스트
+            </button>
+          </div>
+
+          <div className="flex items-end space-x-2 mt-4">
             <span className="text-4xl font-bold text-white">
               {safeStats.cpu}%
             </span>
             <span className="text-gray-500 mb-1">CPU</span>
           </div>
+
           <div className="w-full bg-gray-700 h-2 rounded-full mt-4 overflow-hidden">
             <div
               className="bg-blue-500 h-2 rounded-full transition-all duration-500"
               style={{ width: `${safeStats.cpu}%` }}
             ></div>
           </div>
+
+          <div className="mt-3 flex justify-between text-sm text-gray-400">
+            <span>RAM Usage</span>
+            <span className="text-white">{safeStats.ram}%</span>
+          </div>
         </div>
 
         {/* 카드 2: AI 상태 */}
-        <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg">
-          {/* ... 기존 내용 ... */}
+        <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg hover:border-purple-500 transition duration-300">
           <h3 className="text-gray-400 text-sm font-medium mb-2">
             AI Engine Status
           </h3>
@@ -86,9 +114,15 @@ export default function Home() {
             >
               {safeAiData.status}
             </span>
-            <span className="text-4xl">🧠</span>
+            <span className="text-4xl animate-bounce">🤖</span>
           </div>
-          <p className="mt-4 text-sm text-gray-400">{safeAiData.message}</p>
+          <div className="mt-4 p-3 bg-gray-700 rounded-lg">
+            <p className="text-sm text-gray-300 leading-relaxed truncate">
+              {safeAiData.model
+                ? `Model: ${safeAiData.model}`
+                : safeAiData.message}
+            </p>
+          </div>
         </div>
 
         {/* 카드 3: 퀵 링크 */}
@@ -101,7 +135,7 @@ export default function Home() {
               <a
                 href="http://sso.tplinkdns.com:9014"
                 target="_blank"
-                className="text-blue-400 hover:underline"
+                className="flex items-center text-blue-400 hover:underline"
               >
                 🏠 대시보드 홈
               </a>
@@ -110,17 +144,28 @@ export default function Home() {
               <a
                 href="https://github.com"
                 target="_blank"
-                className="text-blue-400 hover:underline"
+                className="flex items-center text-blue-400 hover:underline"
               >
-                🔗 GitHub
+                🔗 GitHub 저장소
+              </a>
+            </li>
+            <li>
+              <a
+                href="http://sso.tplinkdns.com"
+                target="_blank"
+                className="flex items-center text-blue-400 hover:underline"
+              >
+                ⚙️ 공유기 설정
               </a>
             </li>
           </ul>
         </div>
       </div>
-      {/* 2. 차트 영역 */}
+
+      {/* --- 중단: 차트 영역 (Recharts) --- */}
       <SystemChart />
-      {/* 3. 하단 도커 관리 패널 */}
+
+      {/* --- 하단: 도커 관리 패널 --- */}
       <div className="bg-gray-800 rounded-xl border border-gray-700 shadow-lg overflow-hidden">
         <div className="p-4 border-b border-gray-700 flex justify-between items-center">
           <h3 className="text-lg font-bold text-white">
@@ -164,9 +209,9 @@ export default function Home() {
                       <button
                         onClick={() => handleRestart(c.id, c.name)}
                         disabled={restartMutation.isPending}
-                        className="text-yellow-400 hover:text-yellow-300 font-medium disabled:opacity-50"
+                        className="text-yellow-400 hover:text-yellow-300 font-medium disabled:opacity-50 transition"
                       >
-                        🔄 Restart
+                        {restartMutation.isPending ? "Wait..." : "🔄 Restart"}
                       </button>
                     </td>
                   </tr>
