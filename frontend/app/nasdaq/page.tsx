@@ -61,7 +61,10 @@ export default function NasdaqPage() {
     });
   };
 
-  const lastPrice = prices.length > 0 ? prices[prices.length - 1].price : 0;
+  const lastItem = prices[prices.length - 1];
+  const lastPrice = lastItem?.price ?? 0; // 값이 없으면 0으로 처리
+
+  // 이제 toFixed를 해도 에러가 안 남 (0.toFixed는 가능하니까)
   const currentPrice = commaizeNumber(lastPrice.toFixed(2));
 
   // 차트 탭 버튼 스타일
