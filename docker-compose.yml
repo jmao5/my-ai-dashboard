@@ -9,44 +9,33 @@ services:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
         NEXT_PUBLIC_AI_URL: ${NEXT_PUBLIC_AI_URL}
     container_name: dash-frontend
-    # working_dir: /app  <-- (선택) Dockerfile에 있어서 없어도 됨
-
-    # ❌ [삭제] 이제 소스코드를 실시간으로 연결할 필요가 없습니다.
-    # volumes:
-    #   - ./frontend:/app
-
     ports:
       - "9014:3000"
-    # ❌ [삭제] command도 지우세요 (Dockerfile CMD가 실행됨)
-    # command: sh -c "npm install && npm run dev"
     environment:
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
       - NEXT_PUBLIC_AI_URL=${NEXT_PUBLIC_AI_URL}
       - NEXTAUTH_URL=${NEXTAUTH_URL}
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - TZ=Asia/Seoul
     depends_on:
       - backend-core
     networks:
       - dash-net
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
 
   # 2. 시스템 백엔드 (Go)
   backend-core:
     build: ./backend-core
     container_name: dash-core
-
-    # ❌ [삭제] 실행 파일이 있는 곳을 덮어쓰면 안 됩니다!
-    # volumes:
-    #   - ./backend-core:/app
-    # 👇 단, 도커 소켓은 필요하니 이것만 남기거나, volumes 자체를 다시 씁니다.
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-
+      - /etc/localtime:/etc/localtime:ro
     ports:
       - "9015:8080"
-    # ❌ [삭제]
-    # command: ...
     environment:
+      - TZ=Asia/Seoul
       - DB_DSN=host=db user=${POSTGRES_USER} password=${POSTGRES_PASSWORD} dbname=${POSTGRES_DB} port=5432 sslmode=disable
       - AI_SERVICE_URL=http://backend-ai:8000
       - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL}
@@ -64,10 +53,12 @@ services:
     # Python은 스크립트 언어라 수정 빈도가 높으니 Volume 유지해도 괜찮습니다.
     volumes:
       - /home/jsh/docker/my-dashboard/backend-ai:/app
+      - /etc/localtime:/etc/localtime:ro
     ports:
       - "9016:8000"
     command: sh -c "pip install -r requirements.txt && python main.py"
     environment:
+      - TZ=Asia/Seoul
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
     networks:
@@ -81,8 +72,10 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+      TZ: Asia/Seoul
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - /etc/localtime:/etc/localtime:ro
     ports:
       - "9017:5432"
     networks:

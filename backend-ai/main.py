@@ -86,7 +86,7 @@ def fetch_market_data():
 
         # 너무 옛날 데이터 삭제 (24시간 지난거 삭제)
         db.query(database.MarketPrice).filter(
-            database.MarketPrice.timestamp < datetime.utcnow() - timedelta(days=1)
+            database.MarketPrice.timestamp < datetime.now() - timedelta(days=1)
         ).delete()
 
         db.commit()
@@ -109,12 +109,12 @@ def fetch_market_data():
             # 절댓값이 설정값보다 크면 알림 (상승/하락 모두)
             if abs(change_percent) >= setting.threshold_percent:
                 # 쿨타임 체크 (30분에 한 번만 알림)
-                if not setting.last_alert_time or datetime.utcnow() - setting.last_alert_time > timedelta(minutes=30):
+                if not setting.last_alert_time or datetime.now() - setting.last_alert_time > timedelta(minutes=30):
                     direction = "떡상 🚀" if change_percent > 0 else "떡락 📉"
                     msg = f"<b>[나스닥 알림]</b>\n{direction} 감지!\n\n현재가: {current_price:.2f}\n변동률: {change_percent:.2f}%\n(설정값: {setting.threshold_percent}%)"
                     send_telegram_msg(msg)
 
-                    setting.last_alert_time = datetime.utcnow()
+                    setting.last_alert_time = datetime.now()
                     db.commit()
 
     except Exception as e:

@@ -28,7 +28,7 @@ class ChatHistory(Base):
     id = Column(Integer, primary_key=True, index=True)
     role = Column(String) # 'user' 또는 'bot'
     message = Column(String)
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    timestamp = Column(DateTime, default=datetime.now)
 
 class Document(Base):
     __tablename__ = "documents"
@@ -36,7 +36,7 @@ class Document(Base):
     id = Column(Integer, primary_key=True, index=True)
     filename = Column(String)
     content = Column(String) # 파일의 텍스트 내용
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    timestamp = Column(DateTime, default=datetime.now)
 
 # 👇 [추가] 시장 가격 기록 (차트용)
 class MarketPrice(Base):
@@ -45,7 +45,7 @@ class MarketPrice(Base):
     id = Column(Integer, primary_key=True, index=True)
     symbol = Column(String, index=True) # 예: NQ=F
     price = Column(Float)
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    timestamp = Column(DateTime, default=datetime.now)
 
 # 👇 [추가] 알림 설정 저장 (사용자 설정)
 class MarketSetting(Base):
