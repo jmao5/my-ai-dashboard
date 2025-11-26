@@ -9,6 +9,7 @@ import UserMenu from "@/components/UserMenu";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { OverlayProvider } from "@toss/use-overlay";
+import { Toaster } from "sonner";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -142,6 +143,12 @@ export default function RootLayout({
                   </main>
                 </div>
               )}
+              <Toaster
+                position="top-center"
+                richColors
+                theme="dark"
+                closeButton
+              />
             </OverlayProvider>
           </QueryProvider>
         </SessionProvider>
