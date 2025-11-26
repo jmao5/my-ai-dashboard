@@ -1,6 +1,6 @@
 import { useOverlay } from "@toss/use-overlay";
 import { useRef } from "react";
-import ConfirmModal from "@/components/ConfirmModal";
+import ConfirmModal from "@/components/common/ConfirmModal";
 
 interface ConfirmOptions {
   title: string;
