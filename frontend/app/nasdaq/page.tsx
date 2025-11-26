@@ -3,68 +3,97 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { marketApi } from "@/services/api";
-// 👇 캔들차트 임포트 (SSR 끄기 필수)
 import dynamic from "next/dynamic";
+import { toast } from "sonner"; // 👈 토스트 라이브러리 임포트
+
+// 캔들차트 SSR 끄고 불러오기
 const CandleChart = dynamic(() => import("@/components/CandleChart"), {
   ssr: false,
+  loading: () => (
+    <div className="h-full flex items-center justify-center text-gray-500 animate-pulse">
+      차트 로딩 중...
+    </div>
+  ),
 });
-import { toast } from "sonner";
-import { commaizeNumber } from "@toss/utils";
 
 export default function NasdaqPage() {
   const queryClient = useQueryClient();
   const [thresholdInput, setThresholdInput] = useState<string>("");
 
-  // 👇 [추가] 차트 설정 상태 (기본: 5분봉, 1일치)
+  // 차트 설정 상태
   const [chartConfig, setChartConfig] = useState({
     interval: "5m",
     range: "1d",
   });
 
-  // 1. 차트 데이터 가져오기 (설정이 바뀔 때마다 자동 갱신)
+  // 1. 차트 데이터 가져오기
   const { data: prices = [], isLoading } = useQuery({
     queryKey: ["marketChart", chartConfig],
     queryFn: () =>
       marketApi.getChartData(chartConfig.interval, chartConfig.range),
-    refetchInterval: 60000, // 1분마다 갱신
+    refetchInterval: 60000,
   });
 
-  // 2. 설정 데이터
+  // 2. 설정 데이터 가져오기
   const { data: setting } = useQuery({
     queryKey: ["marketSetting"],
     queryFn: marketApi.getSetting,
   });
 
+  // 👇 3. [수정] 설정 저장 Mutation (토스트 적용)
   const settingMutation = useMutation({
     mutationFn: (vars: { val: number; active: boolean }) =>
       marketApi.updateSetting(vars.val, vars.active),
-    onSuccess: () => {
-      toast.success("설정 저장 완료");
+    onSuccess: (_, variables) => {
+      // 저장 성공 시 토스트 띄우기
+      toast.success("설정이 저장되었습니다! ✅", {
+        description: `알림 기준: ${variables.val}%, 상태: ${variables.active ? "ON" : "OFF"}`,
+        duration: 3000, // 3초간 표시
+      });
+      // 데이터 새로고침
       queryClient.invalidateQueries({ queryKey: ["marketSetting"] });
     },
-    onError: () => toast.error("저장 실패"),
+    onError: (err) => {
+      // 실패 시 에러 토스트
+      toast.error("설정 저장 실패 ❌", {
+        description: "서버와 연결할 수 없습니다.",
+      });
+      console.error(err);
+    },
   });
 
-  // 버튼 핸들러들...
+  // 저장 버튼 핸들러
   const handleSave = () => {
-    /* 기존 코드 */
-    const val = parseFloat(thresholdInput) || setting?.threshold;
+    const val = parseFloat(thresholdInput);
+
+    // 입력값이 없거나 숫자가 아니면 경고
+    if (isNaN(val)) {
+      toast.warning("올바른 숫자를 입력해주세요.");
+      return;
+    }
+
     const active = setting?.is_active ?? true;
+
+    // 로딩 토스트 (선택사항, 여기선 바로 mutation 호출)
     settingMutation.mutate({ val, active });
   };
+
+  // ON/OFF 토글 핸들러
   const toggleActive = () => {
-    /* 기존 코드 */
     if (!setting) return;
-    settingMutation.mutate({
-      val: setting.threshold,
-      active: !setting.is_active,
-    });
+    const newVal = setting.threshold;
+    const newActive = !setting.is_active;
+
+    settingMutation.mutate({ val: newVal, active: newActive });
+
+    // 토글 시에는 즉각적인 피드백을 위해 별도 메시지 (Mutation onSuccess에서 덮어씌워질 수 있음)
+    toast.info(newActive ? "알림이 켜졌습니다 🔔" : "알림이 꺼졌습니다 🔕");
   };
 
   const currentPrice =
     prices.length > 0 ? prices[prices.length - 1].close.toFixed(2) : "...";
 
-  // 차트 탭 버튼 스타일
+  // 탭 버튼 스타일
   const tabClass = (isActive: boolean) =>
     `px-3 py-1 text-xs rounded transition ${isActive ? "bg-blue-600 text-white" : "bg-gray-700 text-gray-400 hover:bg-gray-600"}`;
 
@@ -84,8 +113,7 @@ export default function NasdaqPage() {
 
       {/* 차트 영역 */}
       <div className="bg-gray-800 p-4 rounded-xl border border-gray-700 shadow-lg h-[500px] flex flex-col">
-        {/* 차트 컨트롤러 (분봉/일봉 선택) */}
-        <div className="flex gap-2 mb-4 border-b border-gray-700 pb-3">
+        <div className="flex gap-2 mb-4 border-b border-gray-700 pb-3 overflow-x-auto">
           <button
             onClick={() => setChartConfig({ interval: "1m", range: "1d" })}
             className={tabClass(chartConfig.interval === "1m")}
@@ -118,7 +146,6 @@ export default function NasdaqPage() {
           </button>
         </div>
 
-        {/* 캔들 차트 */}
         <div className="flex-1 min-h-0">
           {isLoading ? (
             <div className="h-full flex items-center justify-center text-gray-500 animate-pulse">
@@ -130,38 +157,51 @@ export default function NasdaqPage() {
         </div>
       </div>
 
-      {/* 알림 설정 패널 (기존 코드 유지) */}
+      {/* 알림 설정 패널 */}
       <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg flex flex-col md:flex-row items-center justify-between gap-4">
-        {/* ... (기존 알림 설정 UI 그대로 두세요) ... */}
         <div>
           <h3 className="text-lg font-bold text-white mb-1">
             🔔 변동성 알림 설정
           </h3>
-          <p className="text-sm text-gray-400">전일 종가 대비 등락률 감시</p>
+          <p className="text-sm text-gray-400">
+            전일 종가 대비 등락률이 설정값을 넘으면 텔레그램을 보냅니다.
+          </p>
         </div>
+
         <div className="flex items-center gap-4 bg-gray-900 p-4 rounded-lg border border-gray-600">
-          <div className="flex gap-2">
-            <input
-              type="number"
-              step="0.1"
-              placeholder={setting?.threshold.toString()}
-              value={thresholdInput}
-              onChange={(e) => setThresholdInput(e.target.value)}
-              className="w-20 bg-gray-800 text-white border border-gray-600 rounded px-2 py-1 text-center"
-            />
+          <div className="flex flex-col">
+            <label className="text-xs text-gray-400 mb-1">알림 기준 (±%)</label>
+            <div className="flex gap-2">
+              <input
+                type="number"
+                step="0.1"
+                placeholder={setting?.threshold?.toString() || "1.0"}
+                value={thresholdInput}
+                onChange={(e) => setThresholdInput(e.target.value)}
+                className="w-20 bg-gray-800 text-white border border-gray-600 rounded px-2 py-1 text-center focus:border-blue-500 outline-none transition"
+              />
+              <button
+                onClick={handleSave}
+                disabled={settingMutation.isPending}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm transition disabled:opacity-50"
+              >
+                {settingMutation.isPending ? "저장..." : "저장"}
+              </button>
+            </div>
+          </div>
+
+          <div className="h-10 w-[1px] bg-gray-600 mx-2"></div>
+
+          <div className="flex flex-col items-center">
+            <span className="text-xs text-gray-400 mb-1">작동 상태</span>
             <button
-              onClick={handleSave}
-              className="bg-blue-600 text-white px-3 py-1 rounded text-sm"
+              onClick={toggleActive}
+              disabled={settingMutation.isPending}
+              className={`px-4 py-1.5 rounded text-sm font-bold transition shadow-lg ${setting?.is_active ? "bg-green-600 hover:bg-green-700 text-white" : "bg-red-600 hover:bg-red-700 text-white"}`}
             >
-              저장
+              {setting?.is_active ? "ON" : "OFF"}
             </button>
           </div>
-          <button
-            onClick={toggleActive}
-            className={`px-3 py-1 rounded text-sm font-bold ${setting?.is_active ? "bg-green-600" : "bg-red-600"}`}
-          >
-            {setting?.is_active ? "ON" : "OFF"}
-          </button>
         </div>
       </div>
     </div>
