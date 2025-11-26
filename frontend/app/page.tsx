@@ -1,13 +1,15 @@
 "use client";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { systemApi, aiApi } from "@/services/api";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { aiApi, systemApi } from "@/services/api";
 import SystemChart from "@/components/SystemChart"; // 차트 컴포넌트
 import { toast } from "sonner";
 import { josa } from "es-hangul";
+import { useConfirm } from "@/hooks/useConfirm";
 
 export default function Home() {
   const queryClient = useQueryClient();
+  const confirm = useConfirm();
 
   // 1. 시스템 상태 (2초마다 갱신)
   const { data: stats } = useQuery({
@@ -42,33 +44,40 @@ export default function Home() {
     },
   });
 
-  const handleRestart = (id: string, name: string) => {
-    const targetName = `'${name}' 컨테이너`;
-    const message = josa(targetName, "을/를") + " 재시작하시겠습니까?";
+  const handleRestart = async (id: string, name: string) => {
+    const target = `'${name}' 컨테이너`;
 
-    toast(message, {
-      action: {
-        label: "실행",
-        onClick: () => restartMutation.mutate(id),
-      },
+    // es-hangul 사용법: josa(단어, '이/가') -> "단어+이" 또는 "단어+가" 반환
+    const message = `${josa(target, "을/를")} 정말 재시작하시겠습니까?`;
+
+    const isConfirmed = await confirm({
+      title: "컨테이너 재시작",
+      description: message,
     });
-  };
 
-  // 👇 5. [추가] 스트레스 테스트 버튼 핸들러
-  const handleStressTest = async () => {
-    if (
-      confirm("⚠️ 주의: 5초간 CPU 부하를 유발하여 알림을 테스트하시겠습니까?")
-    ) {
-      try {
-        await systemApi.triggerStress();
-        alert("🔥 부하 테스트 시작! 텔레그램을 확인하세요.");
-      } catch (error) {
-        console.error(error);
-        alert("요청 실패");
-      }
+    if (isConfirmed) {
+      restartMutation.mutate(id);
     }
   };
 
+  // 👇 [리팩토링] 스트레스 테스트 핸들러
+  const handleStressTest = async () => {
+    // 1. 커스텀 모달 호출 (await로 결과 기다림)
+    const isConfirmed = await confirm({
+      title: "부하 테스트 시작",
+      description:
+        "⚠️ 주의: 5초간 CPU 부하를 유발합니다. 알림 시스템(텔레그램)이 정상 작동하는지 테스트하시겠습니까?",
+    });
+
+    if (isConfirmed) {
+      // 2. 비동기 작업 상태를 토스트로 보여줌 (로딩 -> 성공/실패 자동 전환)
+      toast.promise(systemApi.triggerStress(), {
+        loading: "서버에 부하를 거는 중...",
+        success: "🔥 테스트 시작! 텔레그램을 확인하세요.",
+        error: "요청 실패: 서버 상태를 확인해주세요.",
+      });
+    }
+  };
   // 데이터 안전 가드
   const safeStats = stats || { cpu: 0, ram: 0 };
   const safeAiData = aiData || { status: "Check", message: "상태 확인 중..." };
