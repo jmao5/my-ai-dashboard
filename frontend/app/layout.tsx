@@ -108,7 +108,10 @@ export default function RootLayout({
                   </aside>
 
                   {/* 2. 메인 콘텐츠 영역 */}
-                  <main className="flex-1 flex flex-col overflow-y-auto w-full relative">
+                  <main
+                    ref={mainContentRef}
+                    className="flex-1 flex flex-col overflow-y-auto w-full relative"
+                  >
                     {/* 헤더 */}
                     <header className="h-16 bg-gray-800 border-b border-gray-700 flex items-center justify-between px-4 md:px-8 shrink-0 sticky top-0 z-30">
                       <div className="flex items-center gap-3">
@@ -139,9 +142,7 @@ export default function RootLayout({
                     </header>
 
                     {/* 콘텐츠 패딩 조정 (모바일 p-4, 데스크탑 p-8) */}
-                    <div className="p-4 md:p-8" ref={mainContentRef}>
-                      {children}
-                    </div>
+                    <div className="p-4 md:p-8">{children}</div>
                   </main>
                 </div>
               )}
