@@ -8,3 +8,4 @@ yfinance       # 👈 주식 데이터 수집
 apscheduler    # 👈 주기적 작업 (Cron 같은 거)
 requests       # 👈 텔레그램 전송용
 pgvector
+langchain-text-splitters
