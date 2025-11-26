@@ -78,7 +78,7 @@ def fetch_market_data():
             print("Market data empty")
             return
 
-        current_price = data['Close'].iloc[-1]
+        current_price = float(data['Close'].iloc[-1])
 
         # 2. DB에 가격 저장
         new_price = database.MarketPrice(symbol=symbol, price=current_price)
@@ -101,7 +101,9 @@ def fetch_market_data():
 
         if setting.is_active:
             # 전일 종가 대비 등락률 계산 (regularMarketPreviousClose가 안되면 open으로 대체)
-            prev_close = ticker.info.get('previousClose', data['Open'].iloc[0])
+            raw_prev_close = ticker.info.get('previousClose', data['Open'].iloc[0])
+            prev_close = float(raw_prev_close)
+
             change_percent = ((current_price - prev_close) / prev_close) * 100
 
             # 절댓값이 설정값보다 크면 알림 (상승/하락 모두)
