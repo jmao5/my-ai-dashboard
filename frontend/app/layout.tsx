@@ -10,6 +10,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { OverlayProvider } from "@toss/use-overlay";
 import { Toaster } from "sonner";
+import FloatingButton from "@/components/common/FloatingButton";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -143,6 +144,7 @@ export default function RootLayout({
                   </main>
                 </div>
               )}
+              <FloatingButton />
               <Toaster
                 position="top-center"
                 richColors
