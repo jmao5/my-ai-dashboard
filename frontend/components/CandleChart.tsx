@@ -12,35 +12,25 @@ import {
 
 // 캔들스틱 그리는 함수
 const CandlestickShape = (props: any) => {
-  const { x, y, width, height, yAxis, payload } = props;
+  const { fill, x, width, yAxis, payload } = props;
 
-  // 데이터가 없으면 그리지 않음
-  if (!payload || !yAxis || !yAxis.scale) {
+  // 1. 데이터나 축 정보가 없으면 그리지 않음 (에러 방지)
+  if (!yAxis || !yAxis.scale || !payload) {
     return null;
   }
 
   const { open, close, high, low } = payload;
 
-  // 데이터가 유효한지 한번 더 체크
-  if (
-    [open, close, high, low].some(
-      (v) => v === undefined || v === null || isNaN(v),
-    )
-  ) {
-    return null;
-  }
-
-  // Y축 좌표 변환 함수
+  // 2. Y축 좌표 변환 함수 (값 -> 픽셀)
   const yScale = yAxis.scale;
 
+  // 좌표 계산
   const yHigh = yScale(high);
   const yLow = yScale(low);
   const yOpen = yScale(open);
   const yClose = yScale(close);
 
-  // 좌표가 숫자가 아니면(NaN) 그리지 않음
-  if ([yHigh, yLow, yOpen, yClose].some(isNaN)) return null;
-
+  // 3. 상승/하락 색상 및 박스 크기 계산
   const isUp = close >= open;
   const candleColor = isUp ? "#ef4444" : "#3b82f6"; // 빨강(상승), 파랑(하락)
 
@@ -48,12 +38,8 @@ const CandlestickShape = (props: any) => {
   const bodyBottom = Math.max(yOpen, yClose);
   let bodyHeight = bodyBottom - bodyTop;
 
-  // 높이가 0이면 최소 1px
-  if (bodyHeight < 1) bodyHeight = 1;
-
-  // 🚨 [핵심 수정] 너비가 너무 좁으면 최소 3px로 강제 조정 (중앙 정렬 보정)
-  const safeWidth = Math.max(width, 4);
-  const safeX = x + (width - safeWidth) / 2;
+  // 높이가 0이면(시가=종가) 최소 1px로 보여줌
+  if (bodyHeight === 0) bodyHeight = 1;
 
   return (
     <g>
@@ -68,9 +54,9 @@ const CandlestickShape = (props: any) => {
       />
       {/* 몸통 (네모) */}
       <rect
-        x={safeX}
+        x={x}
         y={bodyTop}
-        width={safeWidth}
+        width={width}
         height={bodyHeight}
         fill={candleColor}
       />
@@ -109,31 +95,36 @@ const CustomTooltip = ({ active, payload }: any) => {
 };
 
 export default function CandleChart({ data }: { data: any[] }) {
+  console.log("data", data);
   if (!data || data.length === 0) {
     return (
       <div className="h-full flex items-center justify-center text-gray-500">
-        데이터 수신 대기 중...
+        데이터 없음
       </div>
     );
   }
 
-  // Y축 범위 정밀 계산
-  const allLows = data.map((d) => d.low).filter((v) => v > 0);
-  const allHighs = data.map((d) => d.high).filter((v) => v > 0);
+  // 👇 [수정] 안전한 최소/최대값 계산
+  // 데이터가 비정상적일 경우를 대비해 기본값 설정
+  const lows = data.map((d) => d.low).filter((v) => v > 0); // 0보다 큰 값만
+  const highs = data.map((d) => d.high).filter((v) => v > 0);
 
-  // 데이터가 아직 로딩 안 됐을 때 방어
-  if (allLows.length === 0) return null;
+  // 데이터가 유효하지 않으면 기본 범위 설정
+  const minValue = lows.length > 0 ? Math.min(...lows) * 0.998 : 0;
+  const maxValue = highs.length > 0 ? Math.max(...highs) * 1.002 : 100;
 
-  const minVal = Math.min(...allLows);
-  const maxVal = Math.max(...allHighs);
-  const padding = (maxVal - minVal) * 0.1; // 10% 여백
-
-  const minY = Math.floor(minVal - padding);
-  const maxY = Math.ceil(maxVal + padding);
+  // domain이 [0, 0]이나 [Infinity, -Infinity]가 되지 않도록 방어
+  const yDomain: [number, number] = [
+    isFinite(minValue) ? minValue : ("auto" as any),
+    isFinite(maxValue) ? maxValue : ("auto" as any),
+  ];
 
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+      <BarChart
+        data={data}
+        margin={{ top: 10, right: 10, left: 0, bottom: 0 }} // 여백 조정
+      >
         <CartesianGrid
           strokeDasharray="3 3"
           stroke="#374151"
@@ -145,18 +136,16 @@ export default function CandleChart({ data }: { data: any[] }) {
           stroke="#9CA3AF"
           fontSize={11}
           tick={{ fill: "#9CA3AF" }}
-          minTickGap={30}
+          minTickGap={30} // 라벨 겹침 방지
         />
 
         <YAxis
-          type="number"
-          domain={[minY, maxY]}
+          domain={yDomain} // 👈 수정된 domain 적용
           stroke="#9CA3AF"
           fontSize={11}
           tick={{ fill: "#9CA3AF" }}
           tickFormatter={(val) => val.toFixed(0)}
           width={60}
-          allowDataOverflow={true}
         />
 
         <Tooltip
@@ -165,10 +154,13 @@ export default function CandleChart({ data }: { data: any[] }) {
           isAnimationActive={false}
         />
 
+        {/* Bar 컴포넌트에 dataKey로 'close'를 주되, 
+            shape props에 우리가 만든 커스텀 함수를 전달하여 캔들을 그림 
+        */}
         <Bar
           dataKey="close"
           shape={<CandlestickShape />}
-          isAnimationActive={false}
+          isAnimationActive={false} // 애니메이션 끔 (성능 최적화)
         />
       </BarChart>
     </ResponsiveContainer>
