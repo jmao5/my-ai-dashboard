@@ -14,13 +14,32 @@ export default function FloatingButton({
 
   // 스크롤 맨 위로 이동
   const scrollToTop = () => {
-    if (scrollTargetRef.current) {
-      // Ref가 가리키는 진짜 DOM 요소에 스크롤 명령
-      scrollTargetRef.current.scrollTo({ top: 0, behavior: "smooth" });
+    const target = scrollTargetRef.current;
+
+    console.log("🖱️ 스크롤 시도!");
+    console.log("1. Ref 상태:", target);
+
+    if (target) {
+      console.log("2. Ref 요소의 스크롤 위치:", target.scrollTop);
+
+      // Ref 요소 스크롤 시도
+      if (target.scrollTop > 0) {
+        console.log("✅ Ref 요소(Main)를 스크롤합니다.");
+        target.scrollTo({ top: 0, behavior: "smooth" });
+      } else {
+        // Ref는 잡혔는데 스크롤이 0이라면? -> Window가 스크롤 되고 있을 확률 높음
+        console.log(
+          "⚠️ Ref 요소 스크롤이 0입니다. Window 스크롤을 시도합니다.",
+        );
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
     } else {
-      // 만약 Ref가 연결 안 됐으면 window 스크롤 (안전장치)
+      // Ref가 아예 안 잡힘
+      console.error("❌ Ref가 null입니다! (연결 실패)");
+      // 비상용: 그냥 화면 전체 스크롤
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
+
     setIsOpen(false);
   };
 
