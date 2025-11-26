@@ -95,25 +95,29 @@ const CustomTooltip = ({ active, payload }: any) => {
 };
 
 export default function CandleChart({ data }: { data: any[] }) {
-  // 데이터 안전성 체크
+  console.log("data", data);
   if (!data || data.length === 0) {
     return (
       <div className="h-full flex items-center justify-center text-gray-500">
-        데이터 수신 대기 중...
+        데이터 없음
       </div>
     );
   }
 
-  // 4. Y축 범위(Domain) 정밀 계산
-  // 데이터 중 최소값과 최대값을 찾아서 차트 위아래 여백을 줌
-  const allLows = data.map((d) => d.low);
-  const allHighs = data.map((d) => d.high);
+  // 👇 [수정] 안전한 최소/최대값 계산
+  // 데이터가 비정상적일 경우를 대비해 기본값 설정
+  const lows = data.map((d) => d.low).filter((v) => v > 0); // 0보다 큰 값만
+  const highs = data.map((d) => d.high).filter((v) => v > 0);
 
-  // 여백 비율 (0.1%)
-  const padding = (Math.max(...allHighs) - Math.min(...allLows)) * 0.1;
+  // 데이터가 유효하지 않으면 기본 범위 설정
+  const minValue = lows.length > 0 ? Math.min(...lows) * 0.998 : 0;
+  const maxValue = highs.length > 0 ? Math.max(...highs) * 1.002 : 100;
 
-  const minY = Math.min(...allLows) - padding;
-  const maxY = Math.max(...allHighs) + padding;
+  // domain이 [0, 0]이나 [Infinity, -Infinity]가 되지 않도록 방어
+  const yDomain: [number, number] = [
+    isFinite(minValue) ? minValue : ("auto" as any),
+    isFinite(maxValue) ? maxValue : ("auto" as any),
+  ];
 
   return (
     <ResponsiveContainer width="100%" height="100%">
@@ -136,14 +140,12 @@ export default function CandleChart({ data }: { data: any[] }) {
         />
 
         <YAxis
-          type="number" // 숫자 타입 명시
-          domain={[minY, maxY]} // 계산된 범위 적용
+          domain={yDomain} // 👈 수정된 domain 적용
           stroke="#9CA3AF"
           fontSize={11}
           tick={{ fill: "#9CA3AF" }}
           tickFormatter={(val) => val.toFixed(0)}
           width={60}
-          allowDataOverflow={true} // 범위 밖 데이터 처리
         />
 
         <Tooltip
