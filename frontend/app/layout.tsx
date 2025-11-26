@@ -11,6 +11,7 @@ import { useRef, useState } from "react";
 import { OverlayProvider } from "@toss/use-overlay";
 import { Toaster } from "sonner";
 import FloatingButton from "@/components/common/FloatingButton";
+import { useScrollStore } from "@/store/useScrollStore";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -22,7 +23,7 @@ export default function RootLayout({
   const pathname = usePathname();
   const isLoginPage = pathname === "/login";
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const mainContentRef = useRef<HTMLDivElement>(null);
+  const mainRef = useScrollStore((state) => state.mainRef);
 
   return (
     <html lang="ko">
@@ -109,7 +110,7 @@ export default function RootLayout({
 
                   {/* 2. 메인 콘텐츠 영역 */}
                   <main
-                    ref={mainContentRef}
+                    ref={mainRef}
                     className="flex-1 flex flex-col overflow-y-auto w-full relative"
                   >
                     {/* 헤더 */}
@@ -147,7 +148,7 @@ export default function RootLayout({
                 </div>
               )}
 
-              <FloatingButton scrollTargetRef={mainContentRef} />
+              <FloatingButton />
               <Toaster
                 position="top-center"
                 richColors

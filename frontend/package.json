@@ -27,7 +27,8 @@
     "recharts": "^3.5.0",
     "remark-gfm": "^4.0.1",
     "sonner": "^2.0.7",
-    "tailwind-merge": "^3.4.0"
+    "tailwind-merge": "^3.4.0",
+    "zustand": "^5.0.8"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

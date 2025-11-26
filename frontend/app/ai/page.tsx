@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { aiApi } from "@/services/api";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { useScrollStore } from "@/store/useScrollStore";
 
 export default function AiChatPage() {
   const [input, setInput] = useState("");
@@ -15,6 +16,8 @@ export default function AiChatPage() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null); // 파일 선택창 제어용
+
+  const customRef = useScrollStore((state) => state.customRef);
   const queryClient = useQueryClient();
 
   // ✅ 1. DB에서 채팅 기록 불러오기 (실시간 동기화)
@@ -109,7 +112,10 @@ export default function AiChatPage() {
       </div>
 
       {/* 2. 메시지 영역 */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+      <div
+        className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar"
+        ref={customRef}
+      >
         {/* (A) DB에서 가져온 대화 기록 */}
         {history.map((msg: any, idx: number) => (
           <div
