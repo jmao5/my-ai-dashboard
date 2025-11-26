@@ -116,7 +116,7 @@ export const marketApi = {
     );
     return response.data;
   },
-  // 설정 가져오기
+  // 설정
   getSetting: async () => {
     const response = await axios.get(
       `${API_CONFIG.AI_API_URL}/api/market/setting`,
@@ -130,6 +130,19 @@ export const marketApi = {
       {
         threshold,
         is_active,
+      },
+    );
+    return response.data;
+  },
+
+  // 차트 데이터 요청 (간격, 기간 설정 가능)
+  getChartData: async (interval: string, range: string) => {
+    const response = await axios.post(
+      `${API_CONFIG.AI_API_URL}/api/market/chart-data`,
+      {
+        symbol: "NQ=F",
+        interval,
+        range,
       },
     );
     return response.data;

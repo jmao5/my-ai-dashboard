@@ -53,7 +53,7 @@ class ChatRequest(BaseModel):
 class AnalysisRequest(BaseModel):
     log_text: str
 
-# 👇 [추가] 텔레그램 발송 함수
+# 텔레그램 발송 함수
 def send_telegram_msg(text):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         return
@@ -63,7 +63,7 @@ def send_telegram_msg(text):
     except Exception as e:
         print(f"Telegram Error: {e}")
 
-# 👇 [추가] 나스닥 데이터 수집 및 알림 로직 (1분마다 실행)
+# 나스닥 데이터 수집 및 알림 로직 (1분마다 실행)
 def fetch_market_data():
     db = database.SessionLocal()
     symbol = "NQ=F" # 나스닥 100 선물
@@ -129,7 +129,7 @@ def get_db():
     finally:
         db.close()
 
-# 👇 [추가] 스케줄러 시작 (서버 켜질 때)
+# 스케줄러 시작 (서버 켜질 때)
 @app.on_event("startup")
 def start_scheduler():
     scheduler = BackgroundScheduler()
@@ -274,7 +274,7 @@ if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
 
-# 👇 [추가] 차트 데이터 API
+# 차트 데이터 API
 @app.get("/api/market/history")
 def get_market_history(db: Session = Depends(get_db)):
     # 최근 60개 (1시간) 데이터 반환
@@ -282,7 +282,7 @@ def get_market_history(db: Session = Depends(get_db)):
     # 시간순 정렬로 뒤집어서 반환
     return [{"time": p.timestamp.strftime("%H:%M"), "price": p.price} for p in prices[::-1]]
 
-# 👇 [추가] 설정 조회 및 수정 API
+# 설정 조회 및 수정 API
 class SettingRequest(BaseModel):
     threshold: float
     is_active: bool
@@ -305,3 +305,41 @@ def update_market_setting(req: SettingRequest, db: Session = Depends(get_db)):
     setting.is_active = 1 if req.is_active else 0
     db.commit()
     return {"message": "설정이 저장되었습니다."}
+
+# 차트 데이터 요청용 스키마
+class ChartRequest(BaseModel):
+    symbol: str = "NQ=F"
+    interval: str = "1m" # 1m, 5m, 15m, 1d, 1wk
+    range: str = "1d"    # 1d, 5d, 1mo, 1y, ytd
+
+# 실시간 차트 데이터 API (DB 안 쓰고 바로 yfinance 조회)
+@app.post("/api/market/chart-data")
+def get_realtime_chart(req: ChartRequest):
+    try:
+        ticker = yf.Ticker(req.symbol)
+        # yfinance로 데이터 가져오기
+        df = ticker.history(period=req.range, interval=req.interval)
+
+        if df.empty:
+            return []
+
+        chart_data = []
+        # 인덱스(시간)를 포함해서 순회
+        for index, row in df.iterrows():
+            # 시간 포맷팅 (일봉이면 날짜만, 분봉이면 시간까지)
+            time_str = index.strftime("%Y-%m-%d") if req.interval in ['1d', '1wk'] else index.strftime("%H:%M")
+
+            chart_data.append({
+                "time": time_str,
+                "open": row['Open'],
+                "high": row['High'],
+                "low": row['Low'],
+                "close": row['Close'],
+                "volume": row['Volume']
+            })
+
+        return chart_data
+
+    except Exception as e:
+        print(f"Chart Data Error: {e}")
+        return []
