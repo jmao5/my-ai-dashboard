@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { systemApi, aiApi } from "@/services/api";
 import SystemChart from "@/components/SystemChart"; // 차트 컴포넌트
 import { toast } from "sonner";
-import { josa } from "@toss/utils";
+import { josa } from "@toss/hangul";
 
 export default function Home() {
   const queryClient = useQueryClient();
