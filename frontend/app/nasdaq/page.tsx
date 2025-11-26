@@ -9,6 +9,7 @@ const CandleChart = dynamic(() => import("@/components/CandleChart"), {
   ssr: false,
 });
 import { toast } from "sonner";
+import { commaizeNumber } from "@toss/utils";
 
 export default function NasdaqPage() {
   const queryClient = useQueryClient();
@@ -60,8 +61,8 @@ export default function NasdaqPage() {
     });
   };
 
-  const currentPrice =
-    prices.length > 0 ? prices[prices.length - 1].close.toFixed(2) : "...";
+  const lastPrice = prices.length > 0 ? prices[prices.length - 1].price : 0;
+  const currentPrice = commaizeNumber(lastPrice.toFixed(2));
 
   // 차트 탭 버튼 스타일
   const tabClass = (isActive: boolean) =>

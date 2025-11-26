@@ -3,6 +3,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { systemApi, aiApi } from "@/services/api";
 import SystemChart from "@/components/SystemChart"; // 차트 컴포넌트
+import { toast } from "sonner";
+import { josa } from "@toss/utils";
 
 export default function Home() {
   const queryClient = useQueryClient();
@@ -41,9 +43,15 @@ export default function Home() {
   });
 
   const handleRestart = (id: string, name: string) => {
-    if (confirm(`정말 '${name}' 컨테이너를 재시작하시겠습니까?`)) {
-      restartMutation.mutate(id);
-    }
+    const targetName = `'${name}' 컨테이너`;
+    const message = josa(targetName, "를/을") + " 재시작하시겠습니까?";
+
+    toast(message, {
+      action: {
+        label: "실행",
+        onClick: () => restartMutation.mutate(id),
+      },
+    });
   };
 
   // 👇 5. [추가] 스트레스 테스트 버튼 핸들러

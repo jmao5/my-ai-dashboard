@@ -9,6 +9,7 @@ import {
   CartesianGrid,
   Tooltip,
 } from "recharts";
+import { commaizeNumber } from "@toss/utils";
 
 // 커스텀 툴팁 (마우스 올렸을 때 상세 정보 표시)
 const CustomTooltip = ({ active, payload }: any) => {
@@ -31,7 +32,9 @@ const CustomTooltip = ({ active, payload }: any) => {
           <span className="text-gray-500">저가:</span>{" "}
           <span className="text-blue-400">{data.low.toFixed(2)}</span>
           <span className="text-gray-500">거래량:</span>{" "}
-          <span className="text-gray-300">{data.volume?.toLocaleString()}</span>
+          <span className="text-gray-300">
+            {commaizeNumber(data.volume || 0)}
+          </span>
         </div>
       </div>
     );
