@@ -1,26 +1,27 @@
 package main
 
 import (
-	"bytes" // 👈 추가
+	"bytes" // 추가
 	_ "bytes"
 	"context"
-	"database/sql" // 👈 DB 연동 패키지
+	"database/sql" // DB 연동 패키지
 	"encoding/json"
 	"fmt"
 	"math"
 	"net/http"
 	"os"
 	"strconv"
-	_ "strconv" // 👈 추가
+	_ "strconv" // 추가
 	"strings"
 	"time"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
-	_ "github.com/lib/pq" // 👈 Postgres 드라이버 (직접 안 써도 import 필수)
+	_ "github.com/lib/pq" // Postgres 드라이버 (직접 안 써도 import 필수)
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/mem"
+	_ "time/tzdata"
 )
 
 // DB 연결 객체
@@ -51,8 +52,8 @@ type RestartRequest struct {
 }
 
 var (
-	telegramBotToken string // 👈 변경
-	telegramChatID   string // 👈 변경
+	telegramBotToken string // 변경
+	telegramChatID   string // 변경
 	alertThreshold   float64
 	lastAlertTime    time.Time
 )
