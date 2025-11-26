@@ -339,7 +339,11 @@ func startMetricsRecorder() {
 			}
 
 			if db != nil {
-				db.Exec("INSERT INTO system_metrics (cpu, ram) VALUES ($1, $2)", cpuVal, ramVal)
+				_, err := db.Exec("INSERT INTO system_metrics (cpu, ram, created_at) VALUES ($1, $2, $3)", cpuVal, ramVal, time.Now())
+
+				if err != nil {
+					fmt.Println("⚠️ 데이터 저장 실패:", err)
+				}
 			}
 		}
 	}()
