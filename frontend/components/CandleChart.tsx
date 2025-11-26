@@ -8,23 +8,24 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Cell,
 } from "recharts";
 
-// 캔들스틱 그리는 커스텀 함수 (막대 + 위아래 꼬리)
+// 캔들스틱 그리는 커스텀 함수
 const CandlestickShape = (props: any) => {
-  const { x, y, width, height, open, close, high, low } = props;
+  // 🚨 [핵심 수정] Y축 데이터가 아직 준비 안 됐으면 아무것도 안 그림 (에러 방지)
+  if (!props.yAxis || !props.yAxis.scale) {
+    return null;
+  }
+
+  const { x, width, yAxis, payload } = props;
+
+  // 데이터가 payload 안에 들어있습니다.
+  const { open, close, high, low } = payload;
+
   const isUp = close >= open;
-  const color = isUp ? "#ef4444" : "#3b82f6"; // 한국식: 상승(빨강), 하락(파랑)
-  // 미국식(상승 초록, 하락 빨강)을 원하시면 위 색상을 '#10B981' : '#EF4444' 로 바꾸세요.
+  const color = isUp ? "#ef4444" : "#3b82f6"; // 빨강(상승), 파랑(하락)
 
-  // Y축 스케일 비율 계산
-  // (props의 y, height는 막대(body) 기준이므로 전체 꼬리 위치를 다시 계산해야 함)
-  // Recharts가 내부적으로 계산해준 좌표를 역산하는 방식보다
-  // stroke로 꼬리를 그리고, rect로 몸통을 그립니다.
-
-  // Recharts에서 Custom Shape에 넘겨주는 props를 활용
-  const { yAxis } = props;
+  // Y축 스케일 함수 (값을 픽셀 좌표로 변환)
   const yScale = yAxis.scale;
 
   const yHigh = yScale(high);
@@ -33,11 +34,11 @@ const CandlestickShape = (props: any) => {
   const yClose = yScale(close);
 
   const bodyTop = Math.min(yOpen, yClose);
-  const bodyHeight = Math.abs(yOpen - yClose) || 1; // 최소 1px 보장
+  const bodyHeight = Math.abs(yOpen - yClose) || 1; // 최소 1px
 
   return (
     <g>
-      {/* 꼬리 (Wick) - 고가와 저가를 잇는 선 */}
+      {/* 꼬리 (Wick) */}
       <line
         x1={x + width / 2}
         y1={yHigh}
@@ -46,14 +47,14 @@ const CandlestickShape = (props: any) => {
         stroke={color}
         strokeWidth={1}
       />
-      {/* 몸통 (Body) - 시가와 종가 사이 박스 */}
+      {/* 몸통 (Body) */}
       <rect x={x} y={bodyTop} width={width} height={bodyHeight} fill={color} />
     </g>
   );
 };
 
 // 커스텀 툴팁
-const CustomTooltip = ({ active, payload, label }: any) => {
+const CustomTooltip = ({ active, payload }: any) => {
   if (active && payload && payload.length) {
     const data = payload[0].payload;
     const isUp = data.close >= data.open;
@@ -61,11 +62,16 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
     return (
       <div className="bg-gray-900 border border-gray-700 p-3 rounded shadow-xl text-xs">
-        <p className="text-gray-400 mb-1">{data.time}</p>
-        <p className={color}>시가: {data.open.toFixed(2)}</p>
-        <p className={color}>종가: {data.close.toFixed(2)}</p>
-        <p className="text-green-400">고가: {data.high.toFixed(2)}</p>
-        <p className="text-red-400">저가: {data.low.toFixed(2)}</p>
+        <p className="text-gray-400 mb-1 font-bold">{data.time}</p>
+        <div className="space-y-1">
+          <p className={color}>시가: {data.open.toFixed(2)}</p>
+          <p className={color}>종가: {data.close.toFixed(2)}</p>
+          <p className="text-green-400">고가: {data.high.toFixed(2)}</p>
+          <p className="text-red-400">저가: {data.low.toFixed(2)}</p>
+          <p className="text-gray-500">
+            거래량: {data.volume?.toLocaleString()}
+          </p>
+        </div>
       </div>
     );
   }
@@ -73,9 +79,18 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export default function CandleChart({ data }: { data: any[] }) {
-  // Y축 범위 자동 계산 (차트가 너무 납작해지지 않게)
-  const minValue = Math.min(...data.map((d) => d.low)) * 0.999;
-  const maxValue = Math.max(...data.map((d) => d.high)) * 1.001;
+  // 데이터가 없을 때 처리
+  if (!data || data.length === 0) {
+    return (
+      <div className="h-full flex items-center justify-center text-gray-500">
+        데이터 없음
+      </div>
+    );
+  }
+
+  // Y축 범위 자동 계산 (여백 0.2%)
+  const minValue = Math.min(...data.map((d) => d.low)) * 0.998;
+  const maxValue = Math.max(...data.map((d) => d.high)) * 1.002;
 
   return (
     <ResponsiveContainer width="100%" height="100%">
@@ -98,17 +113,17 @@ export default function CandleChart({ data }: { data: any[] }) {
           fontSize={11}
           tick={{ fill: "#9CA3AF" }}
           tickFormatter={(val) => val.toFixed(0)}
+          width={60} // Y축 너비 확보
         />
         <Tooltip
           content={<CustomTooltip />}
           cursor={{ fill: "rgba(255, 255, 255, 0.05)" }}
         />
 
-        {/* 바 차트를 캔들스틱 모양으로 변신시킴 */}
         <Bar
-          dataKey="close" // 값 자체는 close를 쓰지만 shape에서 다 그림
+          dataKey="close"
           shape={<CandlestickShape />}
-          isAnimationActive={false} // 깜빡임 방지
+          isAnimationActive={false}
         />
       </BarChart>
     </ResponsiveContainer>
