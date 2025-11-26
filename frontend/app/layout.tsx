@@ -7,7 +7,7 @@ import QueryProvider from "@/providers/QueryProvider";
 import SessionProvider from "@/providers/SessionProvider";
 import UserMenu from "@/components/UserMenu";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { OverlayProvider } from "@toss/use-overlay";
 import { Toaster } from "sonner";
 import FloatingButton from "@/components/common/FloatingButton";
@@ -21,9 +21,8 @@ export default function RootLayout({
 }>) {
   const pathname = usePathname();
   const isLoginPage = pathname === "/login";
-
-  // 모바일 사이드바 열림/닫힘 상태
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const mainContentRef = useRef<HTMLDivElement>(null);
 
   return (
     <html lang="ko">
@@ -109,7 +108,10 @@ export default function RootLayout({
                   </aside>
 
                   {/* 2. 메인 콘텐츠 영역 */}
-                  <main className="flex-1 flex flex-col overflow-y-auto w-full relative">
+                  <main
+                    ref={mainContentRef}
+                    className="flex-1 flex flex-col overflow-y-auto w-full relative"
+                  >
                     {/* 헤더 */}
                     <header className="h-16 bg-gray-800 border-b border-gray-700 flex items-center justify-between px-4 md:px-8 shrink-0 sticky top-0 z-30">
                       <div className="flex items-center gap-3">
@@ -144,7 +146,8 @@ export default function RootLayout({
                   </main>
                 </div>
               )}
-              <FloatingButton />
+
+              <FloatingButton scrollTargetRef={mainContentRef} />
               <Toaster
                 position="top-center"
                 richColors

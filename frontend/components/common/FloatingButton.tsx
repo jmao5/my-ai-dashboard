@@ -1,16 +1,26 @@
 "use client";
 
-import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { RefObject, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 
-export default function FloatingButton() {
+export default function FloatingButton({
+  scrollTargetRef,
+}: {
+  scrollTargetRef: RefObject<HTMLDivElement | null>;
+}) {
   const [isOpen, setIsOpen] = useState(false);
   const router = useRouter();
 
   // 스크롤 맨 위로 이동
   const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (scrollTargetRef.current) {
+      // Ref가 가리키는 진짜 DOM 요소에 스크롤 명령
+      scrollTargetRef.current.scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+      // 만약 Ref가 연결 안 됐으면 window 스크롤 (안전장치)
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
     setIsOpen(false);
   };
 
