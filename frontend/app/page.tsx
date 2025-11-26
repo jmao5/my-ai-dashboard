@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { systemApi, aiApi } from "@/services/api";
 import SystemChart from "@/components/SystemChart"; // 차트 컴포넌트
 import { toast } from "sonner";
-import { josa } from "@toss/hangul";
+import { josa } from "es-hangul";
 
 export default function Home() {
   const queryClient = useQueryClient();
@@ -44,7 +44,7 @@ export default function Home() {
 
   const handleRestart = (id: string, name: string) => {
     const targetName = `'${name}' 컨테이너`;
-    const message = josa(targetName, "를/을") + " 재시작하시겠습니까?";
+    const message = josa(targetName, "을/를") + " 재시작하시겠습니까?";
 
     toast(message, {
       action: {
