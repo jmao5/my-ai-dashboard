@@ -2,7 +2,8 @@ from sqlalchemy import create_engine, Column, Integer, String, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
-from sqlalchemy import Float # 👈 Float 추가
+from sqlalchemy import Float # Float 추가
+from pgvector.sqlalchemy import Vector # 필수
 import os
 
 # 환경 변수에서 DB 주소 가져오기 (없으면 기본값 사용 - 안전장치)
@@ -26,9 +27,12 @@ class ChatHistory(Base):
     __tablename__ = "chat_history"
 
     id = Column(Integer, primary_key=True, index=True)
-    role = Column(String) # 'user' 또는 'bot'
+    role = Column(String)
     message = Column(String)
     timestamp = Column(DateTime, default=datetime.now)
+
+    # 대화 내용의 의미를 저장할 벡터 컬럼 (768차원)
+    embedding = Column(Vector(768))
 
 class Document(Base):
     __tablename__ = "documents"
@@ -38,7 +42,7 @@ class Document(Base):
     content = Column(String) # 파일의 텍스트 내용
     timestamp = Column(DateTime, default=datetime.now)
 
-# 👇 [추가] 시장 가격 기록 (차트용)
+# 시장 가격 기록 (차트용)
 class MarketPrice(Base):
     __tablename__ = "market_prices"
 
@@ -47,7 +51,7 @@ class MarketPrice(Base):
     price = Column(Float)
     timestamp = Column(DateTime, default=datetime.now)
 
-# 👇 [추가] 알림 설정 저장 (사용자 설정)
+# 알림 설정 저장 (사용자 설정)
 class MarketSetting(Base):
     __tablename__ = "market_settings"
 

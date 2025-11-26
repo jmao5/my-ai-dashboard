@@ -173,39 +173,95 @@ async def upload_document(file: UploadFile = File(...), db: Session = Depends(ge
 @app.post("/api/chat")
 async def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
     user_msg = request.message
-    db_user_msg = database.ChatHistory(role="user", message=user_msg)
+
+    # 1. 질문을 벡터로 변환 (의미 추출)
+    try:
+        current_vector = get_embedding(user_msg)
+    except:
+        current_vector = None # 임베딩 실패 시 검색 포기
+
+    # 2. 유저 메시지 DB 저장 (벡터 포함)
+    db_user_msg = database.ChatHistory(
+        role="user",
+        message=user_msg,
+        embedding=current_vector # 👈 벡터도 같이 저장!
+    )
     db.add(db_user_msg)
     db.commit()
 
     ai_response = ""
+
     try:
         if not GOOGLE_API_KEY or not model:
             ai_response = "AI 모델 오류"
         else:
-            latest_doc = db.query(database.Document).order_by(database.Document.id.desc()).first()
-            context_prompt = ""
-            if latest_doc:
-                context_prompt = f"[참고 문서: {latest_doc.filename}]\n{latest_doc.content}\n---\n질문: {user_msg}"
-            else:
-                context_prompt = user_msg
+            # === 🧠 장기 기억 소환 (Long-term Memory) ===
+            related_memories = []
+            if current_vector is not None:
+                # 나와 관련된 과거 대화(user 발화만) 중 가장 유사한 5개 검색
+                # 단, 방금 저장한 최신 메시지는 제외(id != db_user_msg.id)
+                memories = db.query(database.ChatHistory) \
+                    .filter(database.ChatHistory.role == 'user') \
+                    .filter(database.ChatHistory.id != db_user_msg.id) \
+                    .order_by(database.ChatHistory.embedding.l2_distance(current_vector)) \
+                    .limit(5).all()
 
-            recent_history = db.query(database.ChatHistory).order_by(database.ChatHistory.id.desc()).limit(10).all()
+                related_memories = [m.message for m in memories]
+
+            # === 📂 문서 참조 (RAG) - 기존 기능 유지 ===
+            latest_doc = db.query(database.DocumentChunk) \
+                .order_by(database.DocumentChunk.embedding.l2_distance(current_vector)) \
+                .limit(2).all()
+
+            doc_context = "\n".join([d.content for d in latest_doc]) if latest_doc else ""
+
+            # === 💬 프롬프트 구성 ===
+            memory_context = "\n".join([f"- {m}" for m in related_memories])
+
+            system_prompt = f"""
+            당신은 사용자와 오랫동안 대화해온 AI 파트너입니다.
+            
+            [과거 대화 기억 (Long-term Memory)]
+            {memory_context}
+            
+            [참고 문서 (Knowledge)]
+            {doc_context}
+            
+            위의 '과거 기억'과 '참고 문서'를 바탕으로, 현재 사용자의 질문에 자연스럽게 답변하세요.
+            과거에 했던 이야기를 언급하면 더 좋습니다.
+            """
+
+            # === 🗣️ 단기 기억 (Short-term Context) ===
+            # 최근 10개 대화는 대화의 흐름(맥락)을 위해 start_chat에 넣어줍니다.
+            recent_history = db.query(database.ChatHistory) \
+                .order_by(database.ChatHistory.id.desc()) \
+                .limit(10).all()
+
             gemini_history = []
             for msg in reversed(recent_history):
                 role = "user" if msg.role == "user" else "model"
+                # 방금 저장한 메시지는 제외 (send_message로 보낼 거니까)
                 if msg.message == user_msg and msg.role == 'user': continue
                 gemini_history.append({"role": role, "parts": [msg.message]})
 
+            # 채팅 세션 시작
             chat_session = model.start_chat(history=gemini_history)
-            response = chat_session.send_message(context_prompt)
+
+            # 최종 전송 (시스템 프롬프트를 질문 앞에 붙여서 보냄)
+            final_msg = f"{system_prompt}\n\n[사용자 질문]: {user_msg}"
+            response = chat_session.send_message(final_msg)
             ai_response = response.text
+
     except Exception as e:
         ai_response = f"Error: {str(e)}"
         print(f"Gemini Error: {e}")
 
+    # 3. AI 답변 DB 저장 (답변도 나중에 검색되도록 벡터화하면 좋지만, 일단 비용 절약 위해 생략하거나 포함 가능)
+    # 여기선 AI 답변은 벡터 없이 저장합니다. (주로 내 질문을 기억하는 게 중요하므로)
     db_ai_msg = database.ChatHistory(role="bot", message=ai_response)
     db.add(db_ai_msg)
     db.commit()
+
     return {"reply": ai_response}
 
 @app.post("/api/analyze/log")
