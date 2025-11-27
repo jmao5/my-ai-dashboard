@@ -5,8 +5,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { aiApi } from "@/services/api";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { useTitle } from "@/hooks/useTitle";
 
 export default function AiChatPage() {
+  useTitle("AI 비서");
   const [input, setInput] = useState("");
 
   // 파일 업로드 알림 메시지를 잠깐 보여주기 위한 로컬 상태

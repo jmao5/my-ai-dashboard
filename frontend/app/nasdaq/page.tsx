@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { marketApi } from "@/services/api";
 import { toast } from "sonner";
 import ChartCard from "@/components/ChartCard";
+import { useTitle } from "@/hooks/useTitle";
 
 // ✅ 표시할 차트 목록 정의
 // 심볼 정보: ES=F(S&P500 선물), BTC-USD(비트코인), KRW=X(원달러 환율)
@@ -16,6 +17,7 @@ const charts = [
 ];
 
 export default function MarketDashboardPage() {
+  useTitle("나스닥 관제");
   // 이름 변경 (나스닥 -> 마켓 대시보드)
   const queryClient = useQueryClient();
   const [thresholdInput, setThresholdInput] = useState<string>("");
