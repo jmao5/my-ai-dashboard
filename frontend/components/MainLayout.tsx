@@ -77,13 +77,13 @@ export default function MainLayout({
           >
             📈 <span>나스닥 관제</span>
           </Link>
-          <Link
-            href="/settings"
-            onClick={() => setIsSidebarOpen(false)}
-            className="block px-4 py-2 rounded hover:bg-gray-700 transition flex items-center gap-2"
-          >
-            ⚙️ <span>설정</span>
-          </Link>
+          {/*<Link*/}
+          {/*  href="/settings"*/}
+          {/*  onClick={() => setIsSidebarOpen(false)}*/}
+          {/*  className="block px-4 py-2 rounded hover:bg-gray-700 transition flex items-center gap-2"*/}
+          {/*>*/}
+          {/*  ⚙️ <span>설정</span>*/}
+          {/*</Link>*/}
         </nav>
         <div className="p-4 border-t border-gray-700 text-sm text-gray-400">
           Status: <span className="text-green-400 font-bold">Online ●</span>
