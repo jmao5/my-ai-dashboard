@@ -28,9 +28,8 @@ export default function FloatingButton() {
           ? window.innerHeight
           : target.clientHeight;
 
-      // 4. [핵심] 화면 높이의 30% 이상 내려갔을 때만 보이게 설정
-      // (예: 화면 높이가 800px이면 240px 이상 스크롤 시 등장)
-      const threshold = viewHeight * 0.3;
+      // 4. [핵심] 화면 높이의 10% 이상 내려갔을 때만 보이게 설정
+      const threshold = viewHeight * 0.1;
 
       if (currentScroll > threshold) {
         setIsVisible(true);
