@@ -114,10 +114,7 @@ export default function LogsPage() {
       </div>
 
       {/* 로그 터미널 창 */}
-      <div
-        className="flex-1 bg-[#0d1117] rounded-xl border border-gray-700 p-4 overflow-hidden shadow-2xl flex flex-col font-mono text-sm relative group"
-        ref={customRef}
-      >
+      <div className="flex-1 bg-[#0d1117] rounded-xl border border-gray-700 p-4 overflow-hidden shadow-2xl flex flex-col font-mono text-sm relative group">
         {/* 터미널 상단 장식 (맥OS 스타일) */}
         <div className="absolute top-3 right-4 flex gap-1.5 opacity-50 group-hover:opacity-100 transition">
           <div className="w-3 h-3 rounded-full bg-red-500"></div>
@@ -126,7 +123,10 @@ export default function LogsPage() {
         </div>
 
         {/* 로그 텍스트 영역 */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar space-y-1 mt-2">
+        <div
+          className="flex-1 overflow-y-auto custom-scrollbar space-y-1 mt-2"
+          ref={customRef}
+        >
           {!activeContainerId ? (
             <div className="text-gray-500 flex h-full items-center justify-center">
               Waiting for container list...
