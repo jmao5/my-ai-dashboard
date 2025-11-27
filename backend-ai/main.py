@@ -2,7 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from sqlalchemy import text # SQL 실행용
+from sqlalchemy import text
 import database
 import os
 import google.generativeai as genai
@@ -12,9 +12,9 @@ import requests
 from datetime import datetime, timedelta
 import math
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+import pandas as pd
 
 # 1. DB 초기화 및 벡터 익스텐션 활성화
-# (pgvector 이미지를 쓰더라도 extension을 create 해줘야 함)
 with database.engine.connect() as con:
     con.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
     con.commit()
@@ -33,7 +33,7 @@ if not GOOGLE_API_KEY:
     print("⚠️ 경고: GEMINI_API_KEY가 없습니다.")
 else:
     genai.configure(api_key=GOOGLE_API_KEY)
-    target_model = 'gemini-2.5-flash'
+    target_model = 'gemini-2.5-flash' # 또는 gemini-1.5-flash
     try:
         model = genai.GenerativeModel(target_model)
         print(f"✅ AI 모델 '{target_model}' 로드 성공!")
@@ -50,7 +50,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- 데이터 모델 ---
+# --- 데이터 모델 정의 ---
 class ChatRequest(BaseModel):
     message: str
 
@@ -66,7 +66,7 @@ class ChartRequest(BaseModel):
     interval: str = "1m"
     range: str = "1d"
 
-# --- 유틸리티 ---
+# --- 유틸리티 함수 ---
 def get_db():
     db = database.SessionLocal()
     try:
@@ -75,33 +75,15 @@ def get_db():
         db.close()
 
 def send_telegram_msg(text):
-    # 1. 환경변수 확인 로그 (디버깅용)
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        print("❌ Telegram Error: 토큰이나 Chat ID가 없습니다.")
         return
-
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-
     try:
-        # 2. 요청 전송
-        response = requests.post(url, json={
-            "chat_id": TELEGRAM_CHAT_ID,
-            "text": text,
-            "parse_mode": "HTML"
-        })
-
-        # 3.응답 상태 확인 (여기가 핵심!)
-        if response.status_code == 200:
-            print("✅ 텔레그램 전송 성공 (200 OK)")
-        else:
-            # 텔레그램이 거절한 이유를 출력
-            print(f"❌ 텔레그램 전송 실패! 상태코드: {response.status_code}")
-            print(f"👉 원인: {response.text}") # 에러 메시지 내용
-
+        requests.post(url, json={"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "HTML"})
     except Exception as e:
-        print(f"❌ Telegram Network Error: {e}")
+        print(f"Telegram Error: {e}")
 
-# 👇 [핵심] 텍스트를 벡터(숫자 배열)로 변환하는 함수
+# 텍스트를 벡터(숫자 배열)로 변환하는 함수
 def get_embedding(text):
     if not GOOGLE_API_KEY: return None
     try:
@@ -115,33 +97,32 @@ def get_embedding(text):
         print(f"Embedding Error: {e}")
         return None
 
-# --- 스케줄러 (나스닥) ---
+# --- 스케줄러 로직 (나스닥 등락 감지) ---
 def fetch_market_data():
     db = database.SessionLocal()
     symbol = "NQ=F"
 
     try:
         ticker = yf.Ticker(symbol)
-        # 1. 데이터 가져오기 (1일치)
         data = ticker.history(period="1d", interval="1m")
 
         if data.empty:
-            print(f"⚠️ [{datetime.now().strftime('%H:%M:%S')}] Market data empty")
             return
 
-        # 현재가 및 기준가(오늘 시초가) 계산
+        # float 변환 필수
         current_price = float(data['Close'].iloc[-1])
-        open_price = float(data['Open'].iloc[0]) # 오늘 장 시작 가격 (기준점)
 
-        # 2. DB에 가격 저장 (기존 로직 유지)
+        # DB 저장
         new_price = database.MarketPrice(symbol=symbol, price=current_price)
         db.add(new_price)
+
+        # 24시간 지난 데이터 삭제
         db.query(database.MarketPrice).filter(
             database.MarketPrice.timestamp < datetime.now() - timedelta(days=1)
         ).delete()
         db.commit()
 
-        # 3. 알림 체크
+        # 알림 체크
         setting = db.query(database.MarketSetting).first()
         if not setting:
             setting = database.MarketSetting(target_symbol=symbol, threshold_percent=1.0)
@@ -149,37 +130,25 @@ def fetch_market_data():
             db.commit()
 
         if setting.is_active:
-            # 등락률 계산 (현재가 - 시초가) / 시초가
+            # 기준가 계산 (오늘 시초가 기준)
+            try:
+                open_price = float(data['Open'].iloc[0])
+            except:
+                open_price = current_price # 예외 시 현재가 사용 (알림 안 가도록)
+
             change_percent = ((current_price - open_price) / open_price) * 100
 
-            # 👇 [디버깅용 로그] 이게 터미널에 찍힙니다.
-            print(f"🔍 [Check] 현재가: {current_price} | 시초가: {open_price} | 변동률: {change_percent:.4f}% | 설정값: {setting.threshold_percent}%")
-
-            # 알림 조건: 변동률의 절댓값이 설정값 이상일 때
             if abs(change_percent) >= setting.threshold_percent:
-                # 쿨타임 로직 (30분)
-                last_time = setting.last_alert_time
-                if not last_time or datetime.now() - last_time > timedelta(minutes=30):
-
+                if not setting.last_alert_time or datetime.now() - setting.last_alert_time > timedelta(minutes=30):
                     direction = "떡상 🚀" if change_percent > 0 else "떡락 📉"
-                    msg = (
-                        f"<b>[나스닥 변동 알림]</b>\n"
-                        f"{direction} 감지!\n\n"
-                        f"현재가: {current_price:,.2f}\n"
-                        f"변동률: {change_percent:.2f}%\n"
-                        f"(기준: 오늘 시초가 대비)\n"
-                        f"(알림 설정: {setting.threshold_percent}%)"
-                    )
+                    msg = f"<b>[나스닥 알림]</b>\n{direction} 감지!\n\n현재가: {current_price:.2f}\n변동률: {change_percent:.2f}%\n(설정값: {setting.threshold_percent}%)"
                     send_telegram_msg(msg)
 
-                    print("🔔 텔레그램 발송 완료!")
                     setting.last_alert_time = datetime.now()
                     db.commit()
-                else:
-                    print("⏳ 쿨타임 대기 중...")
 
     except Exception as e:
-        print(f"❌ Market Fetch Error: {e}")
+        print(f"Market Fetch Error: {e}")
     finally:
         db.close()
 
@@ -189,15 +158,20 @@ def start_scheduler():
     scheduler.add_job(fetch_market_data, 'interval', minutes=1)
     scheduler.start()
 
-# --- API ---
+# --- API 엔드포인트 ---
 
 @app.get("/")
 def read_root():
-    return {"message": "AI Server Running"}
+    return {"message": "Gemini AI Server is Running!"}
 
 @app.get("/api/ai-status")
 def get_ai_status():
-    return {"status": "Online" if model else "Offline", "model": str(model.model_name) if model else "None"}
+    status = "Online" if model else "Offline"
+    return {
+        "status": status,
+        "model": model.model_name if model else "None",
+        "message": "AI가 준비되었습니다."
+    }
 
 @app.get("/api/chat/history")
 def get_chat_history(db: Session = Depends(get_db)):
@@ -205,10 +179,10 @@ def get_chat_history(db: Session = Depends(get_db)):
     return [{
         "role": h.role,
         "text": h.message,
-        "timestamp": h.timestamp.strftime("%Y-%m-%d %H:%M:%S") # 예: 2024-05-20 14:30
+        "timestamp": h.timestamp.strftime("%Y-%m-%d %H:%M")
     } for h in history[::-1]]
 
-# 👇 [파일 업로드] 텍스트를 쪼개서 벡터로 저장
+# [파일 업로드] RAG
 @app.post("/api/upload")
 async def upload_document(file: UploadFile = File(...), db: Session = Depends(get_db)):
     try:
@@ -225,16 +199,16 @@ async def upload_document(file: UploadFile = File(...), db: Session = Depends(ge
                 db.add(db_chunk)
 
         db.commit()
-        return {"message": f"파일 '{file.filename}' 학습 완료! ({len(chunks)} 조각)", "preview": text_content[:50] + "..."}
+        return {"message": f"파일 '{file.filename}' 학습 완료!", "preview": text_content[:50] + "..."}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"업로드 실패: {str(e)}")
 
-# api chat
+# [채팅] Memory + RAG
 @app.post("/api/chat")
 async def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
     user_msg = request.message
 
-    # 1. 현재 질문 벡터화 (의미 추출)
+    # 1. 현재 질문 벡터화
     current_vector = get_embedding(user_msg)
 
     # 2. 유저 메시지 DB 저장
@@ -245,23 +219,20 @@ async def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
     ai_response = ""
     try:
         if not model:
-            ai_response = "AI 모델 오류: 모델이 로드되지 않았습니다."
+            ai_response = "AI 모델 오류"
         else:
-            # === 🧠 1. 관련 기억 검색 (Long-term Memory) ===
+            # 3. 장기 기억 검색
             memory_context = ""
             if current_vector is not None:
-                # 나와 관련된 과거 대화(user 발화) 중 가장 유사한 5개 검색
-                # (방금 저장한 최신 메시지는 제외)
                 memories = db.query(database.ChatHistory) \
                     .filter(database.ChatHistory.role == 'user') \
                     .filter(database.ChatHistory.id != db_user_msg.id) \
                     .order_by(database.ChatHistory.embedding.l2_distance(current_vector)) \
                     .limit(5).all()
-
                 if memories:
                     memory_context = "\n".join([f"- {m.timestamp.strftime('%Y-%m-%d')}: {m.message}" for m in memories])
 
-            # === 📂 2. 문서 지식 검색 (RAG) ===
+            # 4. 문서 지식 검색
             doc_context = ""
             if current_vector is not None:
                 docs = db.query(database.DocumentChunk) \
@@ -270,32 +241,26 @@ async def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
                 if docs:
                     doc_context = "\n\n".join([f"[출처: {d.filename}]\n{d.content}" for d in docs])
 
-            # === 🗣️ 3. 시스템 프롬프트 (고급 엔지니어링) ===
-            # 태그(< >)를 사용하여 정보의 출처를 명확히 구분하고, AI의 행동 지침을 구체화합니다.
-
-            system_instruction = f"""
-            당신은 사용자의 개인 서버를 관리하고 돕는 유능한 AI 비서 'ServerBot'입니다.
-            아래 제공된 [기억]과 [지식]을 당신의 배경지식으로 활용하여 답변하세요.
-
+            # 5. 프롬프트 구성
+            system_prompt = f"""
+            당신은 유능한 AI 비서 'ServerBot'입니다.
+            
             <instructions>
-            1. **자연스러운 대화**: '문서에 따르면', '기억을 조회해보니' 같은 말은 하지 마세요. 원래 알고 있던 것처럼 자연스럽게 대화하세요.
-            2. **맥락 유지**: 사용자가 과거에 했던 말을 기억하고 있다면, 적절한 타이밍에 아는 척을 해주세요. (예: "아까 말씀하신 것처럼~")
-            3. **전문성**: 서버, 코딩, 금융 관련 질문에는 전문적으로 답변하고, 잡담에는 친근하게 반응하세요.
-            4. **형식**: 답변은 Markdown 형식을 사용하여 가독성 있게 작성하세요.
-            5. **정보 부족**: 제공된 정보로 답을 알 수 없으면 솔직하게 모르겠다고 하거나 일반적인 지식으로 답변하세요.
+            1. 자연스럽게 대화하세요. '문서에 따르면' 같은 말은 빼세요.
+            2. 과거 대화를 기억하고 있다면 적절히 언급해주세요.
+            3. 답변은 Markdown 형식을 사용하세요.
             </instructions>
-
+            
             <long_term_memory>
-            {memory_context if memory_context else "관련된 과거 기억 없음"}
+            {memory_context if memory_context else "기억 없음"}
             </long_term_memory>
-
+            
             <knowledge_base>
-            {doc_context if doc_context else "관련된 문서 내용 없음"}
+            {doc_context if doc_context else "관련 문서 없음"}
             </knowledge_base>
             """
 
-            # === 💬 4. 단기 기억 (대화 흐름 유지) ===
-            # 최근 대화 10개를 가져와서 채팅 세션에 넣어줍니다.
+            # 6. 단기 기억 (최근 10개)
             recent_history = db.query(database.ChatHistory) \
                 .order_by(database.ChatHistory.id.desc()).limit(10).all()
 
@@ -305,36 +270,50 @@ async def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
                 if msg.message == user_msg and msg.role == 'user': continue
                 gemini_history.append({"role": role, "parts": [msg.message]})
 
-            # 채팅 세션 시작
             chat_session = model.start_chat(history=gemini_history)
-
-            # 최종 프롬프트 조합 (시스템 지시사항 + 사용자 질문)
-            final_prompt = f"{system_instruction}\n\n사용자 질문: {user_msg}"
-
-            response = chat_session.send_message(final_prompt)
+            response = chat_session.send_message(f"{system_prompt}\n\n질문: {user_msg}")
             ai_response = response.text
 
     except Exception as e:
-        ai_response = f"죄송합니다. 생각하는 도중에 오류가 발생했습니다.\n(Error: {str(e)})"
+        ai_response = f"Error: {str(e)}"
         print(f"Gemini Error: {e}")
 
-    # 답변 저장
     db_ai_msg = database.ChatHistory(role="bot", message=ai_response)
     db.add(db_ai_msg)
     db.commit()
 
     return {"reply": ai_response}
 
-# --- 기타 API (로그 분석, 나스닥 등) ---
+# 👇 [수정] 한국어 로그 분석 API
 @app.post("/api/analyze/log")
 async def analyze_log(request: AnalysisRequest):
     if not model: return {"reply": "AI 로드 실패"}
-    prompt = f"System Admin Mode. Analyze this log:\n{request.log_text[:5000]}"
+
+    log_content = request.log_text[-5000:] if len(request.log_text) > 5000 else request.log_text
+
+    # 한국어 프롬프트 적용
+    prompt = f"""
+    당신은 유능한 시니어 시스템 관리자입니다.
+    아래 로그를 분석하여 **반드시 한국어**로 보고서를 작성하세요.
+    
+    [로그 내용]
+    {log_content}
+    
+    [요청사항]
+    1. 핵심 요약 (무슨 일이 있었는지)
+    2. 에러 및 경고 원인 분석
+    3. 구체적인 해결 명령어 또는 방안 제안
+    4. 가독성 좋은 마크다운 형식 사용
+    """
+
     try:
-        return {"reply": model.generate_content(prompt).text}
+        response = model.generate_content(prompt)
+        return {"reply": response.text}
     except Exception as e:
         return {"reply": f"Error: {e}"}
 
+
+# --- 나스닥 관련 API ---
 @app.get("/api/market/history")
 def get_market_history(db: Session = Depends(get_db)):
     prices = db.query(database.MarketPrice).order_by(database.MarketPrice.id.desc()).limit(60).all()
@@ -343,9 +322,7 @@ def get_market_history(db: Session = Depends(get_db)):
 @app.get("/api/market/setting")
 def get_market_setting(db: Session = Depends(get_db)):
     setting = db.query(database.MarketSetting).first()
-    if not setting:
-        return {"threshold": 1.0, "is_active": True}
-    # 0이면 False, 1이면 True로 변환해서 전달
+    if not setting: return {"threshold": 1.0, "is_active": True}
     return {"threshold": setting.threshold_percent, "is_active": bool(setting.is_active)}
 
 @app.post("/api/market/setting")
@@ -359,18 +336,14 @@ def update_market_setting(req: SettingRequest, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "저장됨"}
 
-# 차트 데이터 API
 @app.post("/api/market/chart-data")
 def get_realtime_chart(req: ChartRequest):
     try:
         ticker = yf.Ticker(req.symbol)
         df = ticker.history(period=req.range, interval=req.interval)
+        if df.empty: return []
 
-        if df.empty:
-            return []
-
-        # 📊 이동평균선 계산
-        # 데이터가 적으면(예: 2개) MA20은 계산 안 되므로 NaN 처리됨
+        # 이동평균선 계산
         df['MA5'] = df['Close'].rolling(window=5).mean()
         df['MA20'] = df['Close'].rolling(window=20).mean()
         df['MA60'] = df['Close'].rolling(window=60).mean()
@@ -378,8 +351,7 @@ def get_realtime_chart(req: ChartRequest):
 
         chart_data = []
         for index, row in df.iterrows():
-            if math.isnan(row['Open']) or math.isnan(row['Close']):
-                continue
+            if math.isnan(row['Open']) or math.isnan(row['Close']): continue
 
             # 시간대 변환 (UTC -> KST)
             try:
@@ -387,30 +359,23 @@ def get_realtime_chart(req: ChartRequest):
                     dt_kst = index.tz_localize('UTC').tz_convert('Asia/Seoul')
                 else:
                     dt_kst = index.tz_convert('Asia/Seoul')
-            except Exception:
+            except:
                 dt_kst = index
 
             time_str = dt_kst.strftime("%Y-%m-%d") if req.interval in ['1d', '1wk', '1mo'] else dt_kst.strftime("%H:%M")
 
             chart_data.append({
                 "time": time_str,
-                "open": float(row['Open']),
-                "high": float(row['High']),
-                "low": float(row['Low']),
-                "close": float(row['Close']),
+                "open": float(row['Open']), "high": float(row['High']),
+                "low": float(row['Low']), "close": float(row['Close']),
                 "volume": int(row['Volume']),
-                # 👇 [추가] 이동평균선 (NaN이면 None으로 보냄)
                 "ma5": float(row['MA5']) if not math.isnan(row['MA5']) else None,
                 "ma20": float(row['MA20']) if not math.isnan(row['MA20']) else None,
                 "ma60": float(row['MA60']) if not math.isnan(row['MA60']) else None,
                 "ma120": float(row['MA120']) if not math.isnan(row['MA120']) else None
             })
-
         return chart_data
-
-    except Exception as e:
-        print(f"Chart Data Error: {e}")
-        return []
+    except: return []
 
 if __name__ == "__main__":
     import uvicorn
