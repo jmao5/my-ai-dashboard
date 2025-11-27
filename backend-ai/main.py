@@ -75,13 +75,31 @@ def get_db():
         db.close()
 
 def send_telegram_msg(text):
+    # 1. 환경변수 확인 로그 (디버깅용)
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        print("❌ Telegram Error: 토큰이나 Chat ID가 없습니다.")
         return
+
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+
     try:
-        requests.post(url, json={"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "HTML"})
+        # 2. 요청 전송
+        response = requests.post(url, json={
+            "chat_id": TELEGRAM_CHAT_ID,
+            "text": text,
+            "parse_mode": "HTML"
+        })
+
+        # 3.응답 상태 확인 (여기가 핵심!)
+        if response.status_code == 200:
+            print("✅ 텔레그램 전송 성공 (200 OK)")
+        else:
+            # 텔레그램이 거절한 이유를 출력
+            print(f"❌ 텔레그램 전송 실패! 상태코드: {response.status_code}")
+            print(f"👉 원인: {response.text}") # 에러 메시지 내용
+
     except Exception as e:
-        print(f"Telegram Error: {e}")
+        print(f"❌ Telegram Network Error: {e}")
 
 # 👇 [핵심] 텍스트를 벡터(숫자 배열)로 변환하는 함수
 def get_embedding(text):
