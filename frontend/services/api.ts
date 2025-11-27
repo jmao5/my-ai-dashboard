@@ -136,11 +136,11 @@ export const marketApi = {
   },
 
   // 차트 데이터 요청 (간격, 기간 설정 가능)
-  getChartData: async (interval: string, range: string) => {
+  getChartData: async (symbol: string, interval: string, range: string) => {
     const response = await axios.post(
       `${API_CONFIG.AI_API_URL}/api/market/chart-data`,
       {
-        symbol: "NQ=F",
+        symbol: symbol, // 👈 여기가 핵심! (받아온 심볼을 넣음)
         interval,
         range,
       },
