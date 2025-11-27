@@ -27,11 +27,6 @@ export default function FloatingButton() {
 
       targetRef.current = target;
 
-      console.log(
-        "🎯 스크롤 타겟 자동 감지:",
-        target === window ? "Window" : target,
-      );
-
       // 3. 스크롤 핸들러 정의
       const handleScroll = () => {
         const currentScroll =
@@ -45,8 +40,8 @@ export default function FloatingButton() {
             ? window.innerHeight
             : (target as HTMLElement).clientHeight;
 
-        // 화면 높이의 30% 이상 내려가면 표시
-        if (currentScroll > viewHeight * 0.3) {
+        // 화면 높이의 10% 이상 내려가면 표시
+        if (currentScroll > viewHeight * 0.1) {
           setIsVisible(true);
         } else {
           setIsVisible(false);

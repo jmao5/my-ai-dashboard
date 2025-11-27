@@ -101,23 +101,29 @@ def get_embedding(text):
 def fetch_market_data():
     db = database.SessionLocal()
     symbol = "NQ=F"
+
     try:
         ticker = yf.Ticker(symbol)
+        # 1. 데이터 가져오기 (1일치)
         data = ticker.history(period="1d", interval="1m")
-        if data.empty: return
 
+        if data.empty:
+            print(f"⚠️ [{datetime.now().strftime('%H:%M:%S')}] Market data empty")
+            return
+
+        # 현재가 및 기준가(오늘 시초가) 계산
         current_price = float(data['Close'].iloc[-1])
+        open_price = float(data['Open'].iloc[0]) # 오늘 장 시작 가격 (기준점)
 
-        # DB 저장
+        # 2. DB에 가격 저장 (기존 로직 유지)
         new_price = database.MarketPrice(symbol=symbol, price=current_price)
         db.add(new_price)
-        # 24시간 지난 데이터 삭제
         db.query(database.MarketPrice).filter(
             database.MarketPrice.timestamp < datetime.now() - timedelta(days=1)
         ).delete()
         db.commit()
 
-        # 알림 로직
+        # 3. 알림 체크
         setting = db.query(database.MarketSetting).first()
         if not setting:
             setting = database.MarketSetting(target_symbol=symbol, threshold_percent=1.0)
@@ -125,19 +131,37 @@ def fetch_market_data():
             db.commit()
 
         if setting.is_active:
-            raw_prev_close = ticker.info.get('previousClose', data['Open'].iloc[0])
-            prev_close = float(raw_prev_close)
-            change_percent = ((current_price - prev_close) / prev_close) * 100
+            # 등락률 계산 (현재가 - 시초가) / 시초가
+            change_percent = ((current_price - open_price) / open_price) * 100
 
+            # 👇 [디버깅용 로그] 이게 터미널에 찍힙니다.
+            print(f"🔍 [Check] 현재가: {current_price} | 시초가: {open_price} | 변동률: {change_percent:.4f}% | 설정값: {setting.threshold_percent}%")
+
+            # 알림 조건: 변동률의 절댓값이 설정값 이상일 때
             if abs(change_percent) >= setting.threshold_percent:
-                if not setting.last_alert_time or datetime.now() - setting.last_alert_time > timedelta(minutes=30):
+                # 쿨타임 로직 (30분)
+                last_time = setting.last_alert_time
+                if not last_time or datetime.now() - last_time > timedelta(minutes=30):
+
                     direction = "떡상 🚀" if change_percent > 0 else "떡락 📉"
-                    msg = f"<b>[나스닥 알림]</b>\n{direction} 감지!\n\n현재가: {current_price:.2f}\n변동률: {change_percent:.2f}%\n(설정값: {setting.threshold_percent}%)"
+                    msg = (
+                        f"<b>[나스닥 변동 알림]</b>\n"
+                        f"{direction} 감지!\n\n"
+                        f"현재가: {current_price:,.2f}\n"
+                        f"변동률: {change_percent:.2f}%\n"
+                        f"(기준: 오늘 시초가 대비)\n"
+                        f"(알림 설정: {setting.threshold_percent}%)"
+                    )
                     send_telegram_msg(msg)
+
+                    print("🔔 텔레그램 발송 완료!")
                     setting.last_alert_time = datetime.now()
                     db.commit()
+                else:
+                    print("⏳ 쿨타임 대기 중...")
+
     except Exception as e:
-        print(f"Market Error: {e}")
+        print(f"❌ Market Fetch Error: {e}")
     finally:
         db.close()
 
