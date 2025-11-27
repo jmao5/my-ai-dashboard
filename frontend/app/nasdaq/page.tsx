@@ -6,19 +6,19 @@ import { marketApi } from "@/services/api";
 import { toast } from "sonner";
 import ChartCard from "@/components/ChartCard";
 
+// ✅ 표시할 차트 목록 정의
+// 심볼 정보: ES=F(S&P500 선물), BTC-USD(비트코인), KRW=X(원달러 환율)
+const charts = [
+  { title: "NASDAQ 100 (Futures)", symbol: "NQ=F" },
+  { title: "S&P 500 (Futures)", symbol: "ES=F" },
+  { title: "Bitcoin (USD)", symbol: "BTC-USD" },
+  { title: "USD/KRW Exchange Rate", symbol: "KRW=X" },
+];
+
 export default function MarketDashboardPage() {
   // 이름 변경 (나스닥 -> 마켓 대시보드)
   const queryClient = useQueryClient();
   const [thresholdInput, setThresholdInput] = useState<string>("");
-
-  // ✅ 표시할 차트 목록 정의
-  // 심볼 정보: ES=F(S&P500 선물), BTC-USD(비트코인), KRW=X(원달러 환율)
-  const charts = [
-    { title: "NASDAQ 100 (Futures)", symbol: "NQ=F" },
-    { title: "S&P 500 (Futures)", symbol: "ES=F" },
-    { title: "Bitcoin (USD)", symbol: "BTC-USD" },
-    { title: "USD/KRW Exchange Rate", symbol: "KRW=X" },
-  ];
 
   // --- 기존 알림 설정 로직 (나스닥 전용) 유지 ---
   const { data: setting } = useQuery({

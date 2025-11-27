@@ -77,6 +77,12 @@ export default function ChartCard({ title, symbol }: Props) {
         {/* 기간 선택 탭 */}
         <div className="flex gap-2 mb-2 border-b border-gray-700 pb-2 overflow-x-auto scrollbar-hide">
           <button
+            onClick={() => setChartConfig({ interval: "1m", range: "1d" })}
+            className={tabClass(chartConfig.interval === "1m")}
+          >
+            1분
+          </button>
+          <button
             onClick={() => setChartConfig({ interval: "5m", range: "1d" })}
             className={tabClass(chartConfig.interval === "5m")}
           >
@@ -99,6 +105,12 @@ export default function ChartCard({ title, symbol }: Props) {
             className={tabClass(chartConfig.interval === "1wk")}
           >
             주봉
+          </button>
+          <button
+            onClick={() => setChartConfig({ interval: "1mo", range: "5y" })}
+            className={tabClass(chartConfig.interval === "1mo")}
+          >
+            월봉
           </button>
         </div>
 

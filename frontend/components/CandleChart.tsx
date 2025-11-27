@@ -2,16 +2,15 @@
 
 import {
   ResponsiveContainer,
-  AreaChart,
+  ComposedChart,
   Area,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
 } from "recharts";
-import { commaizeNumber } from "@toss/utils";
 
-// 커스텀 툴팁 (마우스 올렸을 때 상세 정보 표시)
 const CustomTooltip = ({ active, payload }: any) => {
   if (active && payload && payload.length) {
     const data = payload[0].payload;
@@ -25,16 +24,38 @@ const CustomTooltip = ({ active, payload }: any) => {
           <span className="text-green-400 font-bold">
             {data.close.toFixed(2)}
           </span>
+          {/* 👇 이동평균선 정보 추가 */}
+          {data.ma5 && (
+            <>
+              <span className="text-yellow-400">MA5:</span>{" "}
+              <span className="text-yellow-400">{data.ma5.toFixed(2)}</span>
+            </>
+          )}
+          {data.ma20 && (
+            <>
+              <span className="text-purple-400">MA20:</span>{" "}
+              <span className="text-purple-400">{data.ma20.toFixed(2)}</span>
+            </>
+          )}
+          {data.ma60 && (
+            <>
+              <span className="text-green-500">MA60:</span>{" "}
+              <span className="text-green-500">{data.ma60.toFixed(2)}</span>
+            </>
+          )}
+          {data.ma120 && (
+            <>
+              <span className="text-orange-400">MA120:</span>{" "}
+              <span className="text-orange-400">{data.ma120.toFixed(2)}</span>
+            </>
+          )}
+          <div className="col-span-2 h-[1px] bg-gray-700 my-1"></div>
           <span className="text-gray-500">시가:</span>{" "}
           <span className="text-white">{data.open.toFixed(2)}</span>
           <span className="text-gray-500">고가:</span>{" "}
           <span className="text-red-400">{data.high.toFixed(2)}</span>
           <span className="text-gray-500">저가:</span>{" "}
           <span className="text-blue-400">{data.low.toFixed(2)}</span>
-          <span className="text-gray-500">거래량:</span>{" "}
-          <span className="text-gray-300">
-            {commaizeNumber(data.volume || 0)}
-          </span>
         </div>
       </div>
     );
@@ -43,7 +64,6 @@ const CustomTooltip = ({ active, payload }: any) => {
 };
 
 export default function CandleChart({ data }: { data: any[] }) {
-  // 데이터가 없을 때
   if (!data || data.length === 0) {
     return (
       <div className="h-full flex items-center justify-center text-gray-500">
@@ -52,15 +72,19 @@ export default function CandleChart({ data }: { data: any[] }) {
     );
   }
 
-  // Y축 스케일 자동 조정을 위한 최소/최대값 계산 (여백 0.05%)
-  const prices = data.map((d) => d.close);
-  const minPrice = Math.min(...prices) * 0.9995;
-  const maxPrice = Math.max(...prices) * 1.0005;
+  // 👇 [중요] Y축 스케일 계산에 MA60, MA120도 포함해야 그래프가 안 잘립니다.
+  const allValues = data.flatMap((d) =>
+    [d.close, d.ma5, d.ma20, d.ma60, d.ma120].filter((v) => v !== null),
+  );
+  const minPrice = Math.min(...allValues) * 0.9995;
+  const maxPrice = Math.max(...allValues) * 1.0005;
 
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <AreaChart data={data} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
-        {/* 배경 그라데이션 정의 */}
+      <ComposedChart
+        data={data}
+        margin={{ top: 10, right: 0, left: 0, bottom: 0 }}
+      >
         <defs>
           <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
             <stop offset="5%" stopColor="#10B981" stopOpacity={0.3} />
@@ -94,7 +118,6 @@ export default function CandleChart({ data }: { data: any[] }) {
 
         <Tooltip content={<CustomTooltip />} />
 
-        {/* 캔들 대신 꽉 찬 영역 차트 (가장 안전한 방식) */}
         <Area
           type="monotone"
           dataKey="close"
@@ -104,7 +127,41 @@ export default function CandleChart({ data }: { data: any[] }) {
           fill="url(#colorPrice)"
           isAnimationActive={false}
         />
-      </AreaChart>
+
+        {/* 👇 이동평균선 라인 추가 */}
+        <Line
+          type="monotone"
+          dataKey="ma5"
+          stroke="#FACC15"
+          strokeWidth={1.5}
+          dot={false}
+          isAnimationActive={false}
+        />
+        <Line
+          type="monotone"
+          dataKey="ma20"
+          stroke="#A78BFA"
+          strokeWidth={1.5}
+          dot={false}
+          isAnimationActive={false}
+        />
+        <Line
+          type="monotone"
+          dataKey="ma60"
+          stroke="#10B981"
+          strokeWidth={1.5}
+          dot={false}
+          isAnimationActive={false}
+        />
+        <Line
+          type="monotone"
+          dataKey="ma120"
+          stroke="#FB923C"
+          strokeWidth={1.5}
+          dot={false}
+          isAnimationActive={false}
+        />
+      </ComposedChart>
     </ResponsiveContainer>
   );
 }

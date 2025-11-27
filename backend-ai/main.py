@@ -345,26 +345,28 @@ def get_realtime_chart(req: ChartRequest):
         if df.empty:
             return []
 
+        # 📊 이동평균선 계산
+        # 데이터가 적으면(예: 2개) MA20은 계산 안 되므로 NaN 처리됨
+        df['MA5'] = df['Close'].rolling(window=5).mean()
+        df['MA20'] = df['Close'].rolling(window=20).mean()
+        df['MA60'] = df['Close'].rolling(window=60).mean()
+        df['MA120'] = df['Close'].rolling(window=120).mean()
+
         chart_data = []
         for index, row in df.iterrows():
             if math.isnan(row['Open']) or math.isnan(row['Close']):
                 continue
 
-            # 🚨 [핵심 수정] 시간대 변환 로직 추가 (UTC/US -> KST)
-            # yfinance 데이터는 보통 timezone정보를 포함하고 있습니다.
+            # 시간대 변환 (UTC -> KST)
             try:
                 if index.tzinfo is None:
-                    # 타임존 정보가 없으면 UTC로 가정하고 한국 시간으로 변환
                     dt_kst = index.tz_localize('UTC').tz_convert('Asia/Seoul')
                 else:
-                    # 타임존 정보가 있으면 바로 한국 시간으로 변환
                     dt_kst = index.tz_convert('Asia/Seoul')
             except Exception:
-                # 변환 실패 시 그냥 원래 시간 사용 (방어 코드)
                 dt_kst = index
 
-            # 변환된 한국 시간(dt_kst)을 문자열로 포맷팅
-            time_str = dt_kst.strftime("%Y-%m-%d") if req.interval in ['1d', '1wk'] else dt_kst.strftime("%H:%M")
+            time_str = dt_kst.strftime("%Y-%m-%d") if req.interval in ['1d', '1wk', '1mo'] else dt_kst.strftime("%H:%M")
 
             chart_data.append({
                 "time": time_str,
@@ -372,7 +374,12 @@ def get_realtime_chart(req: ChartRequest):
                 "high": float(row['High']),
                 "low": float(row['Low']),
                 "close": float(row['Close']),
-                "volume": int(row['Volume'])
+                "volume": int(row['Volume']),
+                # 👇 [추가] 이동평균선 (NaN이면 None으로 보냄)
+                "ma5": float(row['MA5']) if not math.isnan(row['MA5']) else None,
+                "ma20": float(row['MA20']) if not math.isnan(row['MA20']) else None
+                "ma60": float(row['MA60']) if not math.isnan(row['MA60']) else None
+                "ma120": float(row['MA120']) if not math.isnan(row['MA120']) else None
             })
 
         return chart_data
