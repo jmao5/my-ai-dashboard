@@ -22,12 +22,10 @@ export const useScrollStore = create<ScrollState>((set, get) => ({
 
     // 1순위: 커스텀 영역 (예: AI 채팅창)
     if (customRef.current) {
-      console.log("⬆️ Custom 영역 스크롤 (Zustand)");
       customRef.current.scrollTo({ top: 0, behavior: "smooth" });
     }
     // 2순위: 메인 레이아웃 영역
     else if (mainRef.current) {
-      console.log("⬆️ Main 영역 스크롤 (Zustand)");
       mainRef.current.scrollTo({ top: 0, behavior: "smooth" });
     }
     // 3순위: 비상용 Window

@@ -8,6 +8,7 @@ import { toast } from "sonner";
 // 👇 공통 모달 훅 & 뷰어 컴포넌트 사용
 import { useModal } from "@/hooks/useModal";
 import LogViewer from "@/components/LogViewer";
+import { useScrollStore } from "@/store/useScrollStore";
 
 export default function LogsPage() {
   // 1. 상태 관리
@@ -37,6 +38,7 @@ export default function LogsPage() {
 
   // 로그 스크롤 자동 이동
   const logEndRef = useRef<HTMLDivElement>(null);
+  const customRef = useScrollStore((state) => state.customRef);
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [logs]);
@@ -112,7 +114,10 @@ export default function LogsPage() {
       </div>
 
       {/* 로그 터미널 창 */}
-      <div className="flex-1 bg-[#0d1117] rounded-xl border border-gray-700 p-4 overflow-hidden shadow-2xl flex flex-col font-mono text-sm relative group">
+      <div
+        className="flex-1 bg-[#0d1117] rounded-xl border border-gray-700 p-4 overflow-hidden shadow-2xl flex flex-col font-mono text-sm relative group"
+        ref={customRef}
+      >
         {/* 터미널 상단 장식 (맥OS 스타일) */}
         <div className="absolute top-3 right-4 flex gap-1.5 opacity-50 group-hover:opacity-100 transition">
           <div className="w-3 h-3 rounded-full bg-red-500"></div>
