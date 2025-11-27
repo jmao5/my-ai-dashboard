@@ -6,6 +6,7 @@ import { aiApi } from "@/services/api";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
+import { useTitle } from "@/hooks/useTitle";
 
 // 시간 포맷팅 헬퍼 함수 (현재 시간 구하기용)
 const getCurrentTime = () => {
@@ -14,6 +15,7 @@ const getCurrentTime = () => {
 };
 
 export default function AiChatPage() {
+  useTitle("AI 챗봇");
   const [input, setInput] = useState("");
   const [localSystemMsg, setLocalSystemMsg] = useState<string | null>(null);
 

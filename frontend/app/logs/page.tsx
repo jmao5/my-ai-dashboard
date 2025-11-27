@@ -6,8 +6,10 @@ import { aiApi, systemApi } from "@/services/api";
 import { toast } from "sonner";
 import { useModal } from "@/hooks/useModal";
 import LogViewer from "@/components/LogViewer";
+import { useTitle } from "@/hooks/useTitle";
 
 export default function LogsPage() {
+  useTitle("시스템 로그");
   // 1. 상태 관리
   const [selectedContainer, setSelectedContainer] = useState<string>("");
 
