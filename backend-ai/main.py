@@ -340,6 +340,14 @@ def get_market_history(db: Session = Depends(get_db)):
     prices = db.query(database.MarketPrice).order_by(database.MarketPrice.id.desc()).limit(60).all()
     return [{"time": p.timestamp.strftime("%H:%M"), "price": p.price} for p in prices[::-1]]
 
+@app.get("/api/market/setting")
+def get_market_setting(db: Session = Depends(get_db)):
+    setting = db.query(database.MarketSetting).first()
+    if not setting:
+        return {"threshold": 1.0, "is_active": True}
+    # 0이면 False, 1이면 True로 변환해서 전달
+    return {"threshold": setting.threshold_percent, "is_active": bool(setting.is_active)}
+
 @app.post("/api/market/setting")
 def update_market_setting(req: SettingRequest, db: Session = Depends(get_db)):
     setting = db.query(database.MarketSetting).first()
