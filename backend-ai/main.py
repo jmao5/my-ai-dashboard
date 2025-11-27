@@ -377,8 +377,8 @@ def get_realtime_chart(req: ChartRequest):
                 "volume": int(row['Volume']),
                 # 👇 [추가] 이동평균선 (NaN이면 None으로 보냄)
                 "ma5": float(row['MA5']) if not math.isnan(row['MA5']) else None,
-                "ma20": float(row['MA20']) if not math.isnan(row['MA20']) else None
-                "ma60": float(row['MA60']) if not math.isnan(row['MA60']) else None
+                "ma20": float(row['MA20']) if not math.isnan(row['MA20']) else None,
+                "ma60": float(row['MA60']) if not math.isnan(row['MA60']) else None,
                 "ma120": float(row['MA120']) if not math.isnan(row['MA120']) else None
             })
 
