@@ -1,14 +1,11 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { systemApi, aiApi } from "@/services/api";
+import { useEffect, useRef, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { aiApi, systemApi } from "@/services/api";
 import { toast } from "sonner";
-
-// 👇 공통 모달 훅 & 뷰어 컴포넌트 사용
 import { useModal } from "@/hooks/useModal";
 import LogViewer from "@/components/LogViewer";
-import { useScrollStore } from "@/store/useScrollStore";
 
 export default function LogsPage() {
   // 1. 상태 관리
@@ -38,7 +35,6 @@ export default function LogsPage() {
 
   // 로그 스크롤 자동 이동
   const logEndRef = useRef<HTMLDivElement>(null);
-  const customRef = useScrollStore((state) => state.customRef);
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [logs]);
@@ -123,10 +119,7 @@ export default function LogsPage() {
         </div>
 
         {/* 로그 텍스트 영역 */}
-        <div
-          className="flex-1 overflow-y-auto custom-scrollbar space-y-1 mt-2"
-          ref={customRef}
-        >
+        <div className="flex-1 overflow-y-auto custom-scrollbar space-y-1 mt-2">
           {!activeContainerId ? (
             <div className="text-gray-500 flex h-full items-center justify-center">
               Waiting for container list...

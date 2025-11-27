@@ -1,57 +1,78 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useScrollStore } from "@/store/useScrollStore";
 import { usePathname } from "next/navigation";
 
 export default function FloatingButton() {
   const [isVisible, setIsVisible] = useState(false);
-  const { scrollToTop, mainRef, customRef } = useScrollStore();
+  // 현재 감지된 스크롤 타겟을 저장
+  const targetRef = useRef<HTMLElement | Window | null>(null);
   const pathname = usePathname();
 
+  // ✅ 스크롤 타겟 자동 탐지 및 리스너 등록
   useEffect(() => {
-    const handleScroll = () => {
-      // 1. 스크롤 대상 식별
-      // customRef(AI채팅) -> mainRef(메인) -> window(비상용) 순서
+    // DOM 렌더링이 끝난 후 찾기 위해 약간의 지연(Time Yield)을 줌
+    const timer = setTimeout(() => {
+      // 1. 'overflow-y-auto' 클래스를 가진 모든 요소 검색
+      const scrollables = document.querySelectorAll(".overflow-y-auto");
+
+      // 2. 우선순위 결정:
+      // - 요소가 있으면: 가장 마지막 요소 (가장 깊은 자식 = 채팅창, 로그창 등) 선택
+      // - 없으면: window (전체 화면)
       const target =
-        customRef.current || mainRef.current || document.documentElement;
+        scrollables.length > 0
+          ? (scrollables[scrollables.length - 1] as HTMLElement)
+          : window;
 
-      // 2. 현재 스크롤 위치 가져오기
-      // window일 경우 scrollY, 일반 요소일 경우 scrollTop 사용
-      const currentScroll =
-        target === document.documentElement ? window.scrollY : target.scrollTop;
+      targetRef.current = target;
 
-      // 3. 현재 화면(뷰포트)의 높이 가져오기
-      const viewHeight =
-        target === document.documentElement
-          ? window.innerHeight
-          : target.clientHeight;
+      console.log(
+        "🎯 스크롤 타겟 자동 감지:",
+        target === window ? "Window" : target,
+      );
 
-      // 4. [핵심] 화면 높이의 10% 이상 내려갔을 때만 보이게 설정
-      const threshold = viewHeight * 0.1;
+      // 3. 스크롤 핸들러 정의
+      const handleScroll = () => {
+        const currentScroll =
+          target === window
+            ? window.scrollY
+            : (target as HTMLElement).scrollTop;
 
-      if (currentScroll > threshold) {
-        setIsVisible(true);
-      } else {
-        setIsVisible(false);
-      }
-    };
+        // 높이 감지 (window는 innerHeight, 요소는 clientHeight)
+        const viewHeight =
+          target === window
+            ? window.innerHeight
+            : (target as HTMLElement).clientHeight;
 
-    // 이벤트 리스너 부착 대상 찾기 (window는 addEventListener 사용)
-    const scrollTarget = customRef.current || mainRef.current || window;
+        // 화면 높이의 30% 이상 내려가면 표시
+        if (currentScroll > viewHeight * 0.3) {
+          setIsVisible(true);
+        } else {
+          setIsVisible(false);
+        }
+      };
 
-    // 스크롤 감지 시작
-    scrollTarget.addEventListener("scroll", handleScroll);
+      // 4. 리스너 등록
+      target.addEventListener("scroll", handleScroll);
+      handleScroll(); // 초기 상태 체크
 
-    // 초기 상태 체크
-    handleScroll();
+      // 클린업: 페이지 이동 시 리스너 제거 (중요!)
+      return () => {
+        target.removeEventListener("scroll", handleScroll);
+      };
+    }, 100); // 0.1초 뒤 실행 (React 렌더링 대기)
 
-    // 뒷정리
-    return () => {
-      scrollTarget.removeEventListener("scroll", handleScroll);
-    };
-  }, [pathname, mainRef, customRef]);
+    return () => clearTimeout(timer);
+  }, [pathname]); // 페이지 바뀔 때마다 다시 탐색
+
+  // ✅ 클릭 시 스크롤 올리기
+  const scrollToTop = () => {
+    const target = targetRef.current;
+    if (target) {
+      target.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
 
   return (
     <AnimatePresence>

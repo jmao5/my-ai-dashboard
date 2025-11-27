@@ -7,11 +7,10 @@ import QueryProvider from "@/providers/QueryProvider";
 import SessionProvider from "@/providers/SessionProvider";
 import UserMenu from "@/components/UserMenu";
 import { usePathname } from "next/navigation";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { OverlayProvider } from "@toss/use-overlay";
 import { Toaster } from "sonner";
 import FloatingButton from "@/components/common/FloatingButton";
-import { useScrollStore } from "@/store/useScrollStore";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -23,7 +22,6 @@ export default function RootLayout({
   const pathname = usePathname();
   const isLoginPage = pathname === "/login";
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const mainRef = useScrollStore((state) => state.mainRef);
 
   return (
     <html lang="ko">
@@ -109,10 +107,7 @@ export default function RootLayout({
                   </aside>
 
                   {/* 2. 메인 콘텐츠 영역 */}
-                  <main
-                    ref={mainRef}
-                    className="flex-1 flex flex-col overflow-y-auto w-full relative"
-                  >
+                  <main className="flex-1 flex flex-col overflow-y-auto w-full relative">
                     {/* 헤더 */}
                     <header className="h-16 bg-gray-800 border-b border-gray-700 flex items-center justify-between px-4 md:px-8 shrink-0 sticky top-0 z-30">
                       <div className="flex items-center gap-3">
