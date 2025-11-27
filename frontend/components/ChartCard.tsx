@@ -83,31 +83,31 @@ export default function ChartCard({ title, symbol }: Props) {
             1분
           </button>
           <button
-            onClick={() => setChartConfig({ interval: "5m", range: "1d" })}
+            onClick={() => setChartConfig({ interval: "5m", range: "7d" })}
             className={tabClass(chartConfig.interval === "5m")}
           >
             5분
           </button>
           <button
-            onClick={() => setChartConfig({ interval: "30m", range: "5d" })}
+            onClick={() => setChartConfig({ interval: "30m", range: "1mo" })}
             className={tabClass(chartConfig.interval === "30m")}
           >
             30분
           </button>
           <button
-            onClick={() => setChartConfig({ interval: "1d", range: "1mo" })}
+            onClick={() => setChartConfig({ interval: "1d", range: "1y" })}
             className={tabClass(chartConfig.interval === "1d")}
           >
             일봉
           </button>
           <button
-            onClick={() => setChartConfig({ interval: "1wk", range: "3mo" })}
+            onClick={() => setChartConfig({ interval: "1wk", range: "5y" })}
             className={tabClass(chartConfig.interval === "1wk")}
           >
             주봉
           </button>
           <button
-            onClick={() => setChartConfig({ interval: "1mo", range: "5y" })}
+            onClick={() => setChartConfig({ interval: "1mo", range: "10y" })}
             className={tabClass(chartConfig.interval === "1mo")}
           >
             월봉
