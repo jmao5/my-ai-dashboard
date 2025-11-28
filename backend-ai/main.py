@@ -13,6 +13,12 @@ from datetime import datetime, timedelta
 import math
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 import pandas as pd
+import importlib.metadata
+try:
+    version = importlib.metadata.version("google-generativeai")
+    print(f"🔥 [System Check] google-generativeai version: {version}")
+except:
+    print("🔥 [System Check] 버전 확인 불가")
 
 # 1. DB 초기화 및 벡터 익스텐션 활성화
 with database.engine.connect() as con:
