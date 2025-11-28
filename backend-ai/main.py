@@ -336,22 +336,31 @@ def update_market_setting(req: SettingRequest, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "저장됨"}
 
+# 차트 데이터 API (디버깅 및 안전장치 강화)
 @app.post("/api/market/chart-data")
 def get_realtime_chart(req: ChartRequest):
     try:
+        # 1. 데이터 가져오기
         ticker = yf.Ticker(req.symbol)
         df = ticker.history(period=req.range, interval=req.interval)
-        if df.empty: return []
 
-        # 이동평균선 계산
-        df['MA5'] = df['Close'].rolling(window=5).mean()
-        df['MA20'] = df['Close'].rolling(window=20).mean()
-        df['MA60'] = df['Close'].rolling(window=60).mean()
-        df['MA120'] = df['Close'].rolling(window=120).mean()
+        # 🚨 [디버깅 로그] 데이터가 비어있으면 로그 출력
+        if df.empty:
+            print(f"⚠️ [Chart Warning] '{req.symbol}' 데이터가 없습니다. (Range: {req.range}, Interval: {req.interval})")
+            return []
+
+        # 이동평균선 계산 (데이터가 충분할 때만)
+        if len(df) >= 5: df['MA5'] = df['Close'].rolling(window=5).mean()
+        if len(df) >= 20: df['MA20'] = df['Close'].rolling(window=20).mean()
+        if len(df) >= 60: df['MA60'] = df['Close'].rolling(window=60).mean()
+        if len(df) >= 120: df['MA120'] = df['Close'].rolling(window=120).mean()
 
         chart_data = []
         for index, row in df.iterrows():
-            if math.isnan(row['Open']) or math.isnan(row['Close']): continue
+            # 데이터 유효성 검사 완화
+            # 가격 정보가 없으면 스킵하지만, 거래량은 없어도 됨
+            if math.isnan(row['Open']) or math.isnan(row['Close']):
+                continue
 
             # 시간대 변환 (UTC -> KST)
             try:
@@ -360,22 +369,37 @@ def get_realtime_chart(req: ChartRequest):
                 else:
                     dt_kst = index.tz_convert('Asia/Seoul')
             except:
-                dt_kst = index
+                dt_kst = index # 실패 시 원본 사용
 
             time_str = dt_kst.strftime("%Y-%m-%d") if req.interval in ['1d', '1wk', '1mo'] else dt_kst.strftime("%H:%M")
 
+            # 거래량 NaN 처리 (0으로 대체)
+            vol = 0
+            if 'Volume' in row and not math.isnan(row['Volume']):
+                vol = int(row['Volume'])
+
             chart_data.append({
                 "time": time_str,
-                "open": float(row['Open']), "high": float(row['High']),
-                "low": float(row['Low']), "close": float(row['Close']),
-                "volume": int(row['Volume']),
-                "ma5": float(row['MA5']) if not math.isnan(row['MA5']) else None,
-                "ma20": float(row['MA20']) if not math.isnan(row['MA20']) else None,
-                "ma60": float(row['MA60']) if not math.isnan(row['MA60']) else None,
-                "ma120": float(row['MA120']) if not math.isnan(row['MA120']) else None
+                "open": float(row['Open']),
+                "high": float(row['High']),
+                "low": float(row['Low']),
+                "close": float(row['Close']),
+                "volume": vol,
+                # MA 값이 NaN이면 None으로 (JSON 변환 시 에러 방지)
+                "ma5": float(row['MA5']) if 'MA5' in row and not math.isnan(row['MA5']) else None,
+                "ma20": float(row['MA20']) if 'MA20' in row and not math.isnan(row['MA20']) else None,
+                "ma60": float(row['MA60']) if 'MA60' in row and not math.isnan(row['MA60']) else None,
+                "ma120": float(row['MA120']) if 'MA120' in row and not math.isnan(row['MA120']) else None
             })
+
+        # 최종 데이터 개수 확인
+        # print(f"✅ [Chart Success] {req.symbol}: {len(chart_data)} rows loaded.")
+
         return chart_data
-    except: return []
+
+    except Exception as e:
+        print(f"❌ Chart Data Error ({req.symbol}): {e}")
+        return []
 
 if __name__ == "__main__":
     import uvicorn
