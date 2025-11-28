@@ -229,6 +229,8 @@ async def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
     user_msg = request.message
     selected_model_name = request.model
 
+    print(f"🤖 [Model Check] 사용자가 요청한 모델: {selected_model_name}")
+
     # 1. 현재 질문 벡터화
     current_vector = get_embedding(user_msg)
 
@@ -243,6 +245,8 @@ async def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
             ai_response = "AI 모델 오류"
         else:
             current_model = genai.GenerativeModel(selected_model_name)
+
+            print(f"✅ [System] 로드된 모델 객체: {current_model.model_name}")
 
             # 3. 장기 기억 검색
             memory_context = ""
@@ -306,7 +310,10 @@ async def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
     db.add(db_ai_msg)
     db.commit()
 
-    return {"reply": ai_response}
+    return {
+        "reply": ai_response,
+        "used_model": selected_model_name
+    }
 
 # 👇 [수정] 한국어 로그 분석 API
 @app.post("/api/analyze/log")

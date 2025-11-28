@@ -59,8 +59,13 @@ export default function AiChatPage() {
   // 메시지 전송 Mutation
   const sendMessageMutation = useMutation({
     mutationFn: (message: string) => aiApi.sendMessage(message, selectedModel),
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["chatHistory"] });
+
+      toast.success("답변이 도착했습니다.", {
+        description: `사용된 모델: ${data.used_model}`, // 백엔드에서 보낸 값
+        duration: 3000,
+      });
     },
     onError: (error) => {
       console.error("Chat Error:", error);
