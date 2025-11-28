@@ -6,7 +6,6 @@ from sqlalchemy import text
 import database
 import os
 import google.generativeai as genai
-from google.ai.generativelanguage import Tool, GoogleSearch
 import yfinance as yf
 from apscheduler.schedulers.background import BackgroundScheduler
 import requests
@@ -253,14 +252,13 @@ async def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
             ai_response = "AI 모델 오류: 초기화되지 않았습니다."
         else:
             # ✨ [수정됨] 구글 검색 도구 설정 (최신 명칭 적용: google_search)
-            search_tool = Tool(
-                google_search=GoogleSearch()
-            )
+            tools_config = [
+                {"google_search": {}}
+            ]
 
-            # 사용자가 선택한 모델에 검색 도구를 달아서 새로 생성
             current_model = genai.GenerativeModel(
                 selected_model_name,
-                tools=[search_tool]
+                tools=tools_config
             )
 
             # === 🧠 3. 관련 기억 검색 (Long-term Memory) ===
