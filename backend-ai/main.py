@@ -215,8 +215,8 @@ async def upload_document(file: UploadFile = File(...), db: Session = Depends(ge
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"업로드 실패: {str(e)}")
 
-# 👇 [최종 수정] 채팅 API (도구 설정 호환성 해결)
-# 👇 [수정됨] 도구 설정 간소화 및 출처 표기 추가
+
+# 👇 [재수정] 400 에러 해결: 도구 설정을 딕셔너리 리스트로 변경
 @app.post("/api/chat")
 async def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
     user_msg = request.message
@@ -224,31 +224,35 @@ async def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
 
     print(f"🤖 요청 모델: {selected_model_name}")
 
-    # 1. 기억 저장 (사용자 질문)
+    # 1. 기억 저장
     current_vector = get_embedding(user_msg)
     db_user_msg = database.ChatHistory(role="user", message=user_msg, embedding=current_vector)
     db.add(db_user_msg)
     db.commit()
 
     ai_response = ""
-    used_sources = "" # 검색 출처 저장용 변수
+    used_sources = ""
 
     try:
         if not GOOGLE_API_KEY:
             ai_response = "AI 모델 오류: API 키가 없습니다."
         else:
-            # === 2. 모델 생성 (Google Search 도구 활성화) ===
-            # tools='google_search_retrieval' 이 한 줄로 검색 기능이 연동됩니다.
+            # === 2. 모델 생성 (수정된 부분) ===
+            # 문자열 대신 명시적인 딕셔너리 구조를 사용합니다.
+            tools_config = [
+                {"google_search": {}}
+            ]
+
             try:
                 current_model = genai.GenerativeModel(
                     selected_model_name,
-                    tools='google_search_retrieval'
+                    tools=tools_config
                 )
             except Exception as e:
                 print(f"⚠️ 검색 도구 설정 실패 (일반 모드로 전환): {e}")
                 current_model = genai.GenerativeModel(selected_model_name)
 
-            # === 3. RAG & Memory (기존 로직 유지) ===
+            # === 3. RAG & Memory ===
             memory_context = ""
             if current_vector is not None:
                 memories = db.query(database.ChatHistory) \
@@ -283,38 +287,34 @@ async def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
             {doc_context if doc_context else "없음"}
             """
 
-            # === 5. 단기 기억 (채팅 히스토리 구성) ===
+            # === 5. 채팅 히스토리 ===
             recent_history = db.query(database.ChatHistory) \
                 .order_by(database.ChatHistory.id.desc()).limit(10).all()
 
             gemini_history = []
             for msg in reversed(recent_history):
                 role = "user" if msg.role == "user" else "model"
-                # 방금 저장한 내 메시지는 중복 전송 방지를 위해 제외
                 if msg.message == user_msg and msg.role == 'user': continue
                 gemini_history.append({"role": role, "parts": [msg.message]})
 
-            # === 6. 채팅 세션 시작 및 전송 ===
-            # history=gemini_history를 넣으면 이전 대화 맥락을 유지합니다.
+            # === 6. 채팅 및 전송 ===
             chat_session = current_model.start_chat(history=gemini_history)
 
             try:
-                # 메시지 전송
                 response = chat_session.send_message(f"{system_prompt}\n\n질문: {user_msg}")
                 ai_response = response.text
 
-                # === 7. [중요] 검색 출처(Grounding Metadata) 확인 ===
-                # 모델이 검색을 수행했다면 candidates 안에 grounding_metadata가 포함됩니다.
-                if response.candidates and response.candidates[0].grounding_metadata.search_entry_point:
-                    # 검색 결과 HTML(소스 링크 포함)을 가져옵니다.
-                    search_html = response.candidates[0].grounding_metadata.search_entry_point.rendered_content
-                    # 텍스트 끝에 출처 정보를 덧붙입니다.
-                    used_sources = f"\n\n🔍 <b>참조 링크:</b>\n{search_html}"
-                    ai_response += used_sources
+                # === 7. 검색 출처 확인 ===
+                # 응답 객체 구조가 버전에 따라 다를 수 있으므로 안전하게 접근
+                if hasattr(response, 'candidates') and response.candidates:
+                    candidate = response.candidates[0]
+                    if hasattr(candidate, 'grounding_metadata') and candidate.grounding_metadata.search_entry_point:
+                        search_html = candidate.grounding_metadata.search_entry_point.rendered_content
+                        used_sources = f"\n\n🔍 <b>참조 링크:</b>\n{search_html}"
+                        ai_response += used_sources
 
             except Exception as e:
-                print(f"⚠️ 전송 중 에러 발생. 도구 없이 재시도합니다. Error: {e}")
-                # 검색 도구 에러 시 일반 모델로 폴백
+                print(f"⚠️ 전송 중 에러 발생 (도구 오류일 가능성). 도구 없이 재시도합니다. Error: {e}")
                 fallback_model = genai.GenerativeModel(selected_model_name)
                 response = fallback_model.generate_content(f"{system_prompt}\n\n질문: {user_msg}")
                 ai_response = response.text
