@@ -71,11 +71,11 @@ export default function MainLayout({
             📝 <span>시스템 로그</span>
           </Link>
           <Link
-            href="/nasdaq"
+            href="/market"
             onClick={() => setIsSidebarOpen(false)}
             className="block px-4 py-2 rounded hover:bg-gray-700 transition flex items-center gap-2"
           >
-            📈 <span>나스닥 관제</span>
+            📈 <span>글로벌 마켓</span>
           </Link>
           {/*<Link*/}
           {/*  href="/settings"*/}

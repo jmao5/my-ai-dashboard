@@ -16,8 +16,8 @@ const charts = [
   { title: "USD/KRW Exchange Rate", symbol: "KRW=X" },
 ];
 
-export default function MarketDashboardPage() {
-  useTitle("나스닥 관제");
+export default function MarketPage() {
+  useTitle("글로벌 마켓");
   // 이름 변경 (나스닥 -> 마켓 대시보드)
   const queryClient = useQueryClient();
   const [thresholdInput, setThresholdInput] = useState<string>("");
@@ -71,7 +71,9 @@ export default function MarketDashboardPage() {
         <h1 className="text-2xl font-bold text-white flex items-center gap-2">
           🌍 Global Market Dashboard
         </h1>
-        <p className="text-gray-400 text-sm">주요 시장 지표 실시간 현황</p>
+        <p className="text-gray-400 text-sm">
+          나스닥, S&P500, 암호화폐 및 환율 실시간 모니터링
+        </p>
       </div>
 
       {/* ✅ 차트 그리드 레이아웃 (핵심!) */}
