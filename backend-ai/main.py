@@ -237,20 +237,31 @@ async def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
         if not GOOGLE_API_KEY:
             ai_response = "AI 모델 오류: API 키가 없습니다."
         else:
-            # === 2. 모델 생성 (수정된 부분) ===
-            # 문자열 대신 명시적인 딕셔너리 구조를 사용합니다.
-            tools_config = [
-                {"google_search": {}}
-            ]
-
+            # === 2. 모델 생성 (Google Search 도구 활성화) ===
             try:
-                current_model = genai.GenerativeModel(
-                    selected_model_name,
-                    tools=tools_config
-                )
+                # [해결책] 딕셔너리 대신 'genai.protos'를 직접 사용하여 모호함 제거
+                # 최신 API는 google_search 필드를 사용합니다.
+                tools_config = [
+                    genai.protos.Tool(
+                        google_search=genai.protos.GoogleSearch()
+                    )
+                ]
+                current_model = genai.GenerativeModel(selected_model_name, tools=tools_config)
+
             except Exception as e:
-                print(f"⚠️ 검색 도구 설정 실패 (일반 모드로 전환): {e}")
-                current_model = genai.GenerativeModel(selected_model_name)
+                print(f"⚠️ 1차 도구 설정 실패: {e}")
+                # 혹시 구버전 라이브러리/모델인 경우 'google_search_retrieval' 필드 시도
+                try:
+                    tools_config = [
+                        genai.protos.Tool(
+                            google_search_retrieval=genai.protos.GoogleSearchRetrieval()
+                        )
+                    ]
+                    current_model = genai.GenerativeModel(selected_model_name, tools=tools_config)
+                    print("✅ 구버전 호환 도구로 설정 성공")
+                except Exception as e2:
+                    print(f"⚠️ 도구 설정 완전 실패 (일반 모드 전환): {e2}")
+                    current_model = genai.GenerativeModel(selected_model_name)
 
             # === 3. RAG & Memory ===
             memory_context = ""
@@ -305,7 +316,6 @@ async def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
                 ai_response = response.text
 
                 # === 7. 검색 출처 확인 ===
-                # 응답 객체 구조가 버전에 따라 다를 수 있으므로 안전하게 접근
                 if hasattr(response, 'candidates') and response.candidates:
                     candidate = response.candidates[0]
                     if hasattr(candidate, 'grounding_metadata') and candidate.grounding_metadata.search_entry_point:
