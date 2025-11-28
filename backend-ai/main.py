@@ -244,8 +244,18 @@ async def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
         else:
             # ✨ [핵심 1] 구글 검색 도구 장착! (인터넷 연결)
             # 사용자가 선택한 모델에 'google_search' 도구를 달아서 새로 생성합니다.
-            tools = [{"google_search": {}}]
-            current_model = genai.GenerativeModel(selected_model_name, tools=tools)
+            tools_config = [
+                {"google_search": {}}
+            ]
+
+            # 만약 위 방식도 안 되면 아예 tools 설정을 빼고
+            # 순수 LLM 모드로 동작하게 try-except로 감싸는 게 안전합니다.
+            try:
+                current_model = genai.GenerativeModel(selected_model_name, tools=tools_config)
+            except Exception as tool_error:
+                print(f"⚠️ Tool Error (검색 기능 비활성화): {tool_error}")
+                # 에러 나면 도구 없이 깡통 모델로 생성
+                current_model = genai.GenerativeModel(selected_model_name)
 
             # === 🧠 관련 기억 검색 (Long-term Memory) ===
             memory_context = ""

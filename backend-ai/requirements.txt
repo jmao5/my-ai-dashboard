@@ -1,11 +1,12 @@
 fastapi
 uvicorn
-sqlalchemy       # 데이터베이스를 다루는 도구 (ORM)
-psycopg2-binary  # PostgreSQL 연결 드라이버
-google-generativeai # 구글 ai api
+sqlalchemy
+psycopg2-binary
+google-generativeai>=0.8.3
 python-multipart
-yfinance       # 👈 주식 데이터 수집
-apscheduler    # 👈 주기적 작업 (Cron 같은 거)
-requests       # 👈 텔레그램 전송용
+yfinance
+apscheduler
+requests
 pgvector
 langchain-text-splitters
+pandas
