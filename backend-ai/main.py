@@ -53,6 +53,7 @@ app.add_middleware(
 # --- 데이터 모델 정의 ---
 class ChatRequest(BaseModel):
     message: str
+    model: str = "gemini-2.5-flash"
 
 class AnalysisRequest(BaseModel):
     log_text: str
@@ -203,10 +204,30 @@ async def upload_document(file: UploadFile = File(...), db: Session = Depends(ge
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"업로드 실패: {str(e)}")
 
+# 👇 [신규 추가] 사용 가능한 모델 목록 반환 API
+@app.get("/api/ai/models")
+def get_available_models():
+    if not GOOGLE_API_KEY:
+        return []
+    try:
+        # generateContent를 지원하는 Gemini 모델만 필터링
+        models = [
+            m.name.replace("models/", "")
+            for m in genai.list_models()
+            if 'generateContent' in m.supported_generation_methods and 'gemini' in m.name
+        ]
+        # 최신순 정렬 (내림차순)
+        models.sort(reverse=True)
+        return models
+    except Exception as e:
+        print(f"Model List Error: {e}")
+        return ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"] # 에러 시 기본 목록
+
 # [채팅] Memory + RAG
 @app.post("/api/chat")
 async def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
     user_msg = request.message
+    selected_model_name = request.model
 
     # 1. 현재 질문 벡터화
     current_vector = get_embedding(user_msg)
@@ -221,6 +242,8 @@ async def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
         if not model:
             ai_response = "AI 모델 오류"
         else:
+            current_model = genai.GenerativeModel(selected_model_name)
+
             # 3. 장기 기억 검색
             memory_context = ""
             if current_vector is not None:
@@ -270,7 +293,8 @@ async def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
                 if msg.message == user_msg and msg.role == 'user': continue
                 gemini_history.append({"role": role, "parts": [msg.message]})
 
-            chat_session = model.start_chat(history=gemini_history)
+            # 7. 생성 (current_model 사용)
+            chat_session = current_model.start_chat(history=gemini_history)
             response = chat_session.send_message(f"{system_prompt}\n\n질문: {user_msg}")
             ai_response = response.text
 

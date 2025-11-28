@@ -18,12 +18,21 @@ export default function AiChatPage() {
   useTitle("AI 챗봇");
   const [input, setInput] = useState("");
   const [localSystemMsg, setLocalSystemMsg] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] =
+    useState<string>("gemini-2.5-flash");
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
-  // 1. DB 데이터 가져오기
+  // 모델 목록 가져오기 (useQuery)
+  const { data: modelList = [] } = useQuery({
+    queryKey: ["aiModels"],
+    queryFn: aiApi.getModels,
+    staleTime: 1000 * 60 * 60, // 1시간 동안 캐시 (자주 안 바뀌니까)
+  });
+
+  // DB 데이터 가져오기
   const { data: history = [], isLoading: isHistoryLoading } = useQuery({
     queryKey: ["chatHistory"],
     queryFn: aiApi.getHistory,
@@ -47,9 +56,9 @@ export default function AiChatPage() {
   };
   useEffect(scrollToBottom, [history, localSystemMsg]);
 
-  // 2. 메시지 전송 Mutation
+  // 메시지 전송 Mutation
   const sendMessageMutation = useMutation({
-    mutationFn: (message: string) => aiApi.sendMessage(message),
+    mutationFn: (message: string) => aiApi.sendMessage(message, selectedModel),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["chatHistory"] });
     },
@@ -59,7 +68,7 @@ export default function AiChatPage() {
     },
   });
 
-  // 3. 파일 업로드 Mutation
+  // 파일 업로드 Mutation
   const uploadMutation = useMutation({
     mutationFn: aiApi.uploadFile,
     onSuccess: (data) => {
@@ -72,7 +81,7 @@ export default function AiChatPage() {
   const handleSendMessage = () => {
     if (!input.trim()) return;
 
-    // ✨ [UX 개선] 내가 보낸 메시지를 화면에 즉시 표시 (낙관적 업데이트 느낌)
+    // [UX 개선] 내가 보낸 메시지를 화면에 즉시 표시 (낙관적 업데이트 느낌)
     // 실제로는 DB 데이터가 오기 전까지 깜빡일 수 있으나, UX상 입력창 비우기가 우선
     sendMessageMutation.mutate(input);
     setInput("");
@@ -91,9 +100,49 @@ export default function AiChatPage() {
     <div className="flex flex-col h-[calc(100vh-8rem)] bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
       {/* 헤더 */}
       <div className="bg-gray-900 p-4 border-b border-gray-700 flex justify-between items-center">
-        <h2 className="text-lg font-bold text-white flex items-center gap-2">
-          🤖 AI Assistant
-        </h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg font-bold text-white hidden md:block">
+            🤖 AI Assistant
+          </h2>
+
+          {/* 모델 선택 Select 박스 */}
+          <div className="relative">
+            <select
+              value={selectedModel}
+              onChange={(e) => setSelectedModel(e.target.value)}
+              className="appearance-none bg-gray-800 text-white text-xs sm:text-sm border border-gray-600 rounded-lg py-1.5 pl-3 pr-8 focus:outline-none focus:border-blue-500 transition cursor-pointer hover:bg-gray-700"
+            >
+              {modelList.length > 0 ? (
+                modelList.map((model: string) => (
+                  <option key={model} value={model}>
+                    {model}
+                  </option>
+                ))
+              ) : (
+                <option value="gemini-2.5-flash">
+                  gemini-2.5-flash (Default)
+                </option>
+              )}
+            </select>
+            {/* 커스텀 화살표 아이콘 */}
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-400">
+              <svg
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M19 9l-7 7-7-7"
+                ></path>
+              </svg>
+            </div>
+          </div>
+        </div>
+
         <div className="flex items-center gap-2">
           {isHistoryLoading && (
             <span className="text-xs text-yellow-500 animate-pulse">
@@ -165,7 +214,7 @@ export default function AiChatPage() {
               </ReactMarkdown>
             </div>
 
-            {/* 👇 [추가] 타임스탬프 표시 */}
+            {/* 타임스탬프 표시 */}
             <span
               className={`text-[10px] text-gray-500 mt-1 ${msg.role === "user" ? "mr-1" : "ml-1"}`}
             >

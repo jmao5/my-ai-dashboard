@@ -62,10 +62,17 @@ export const aiApi = {
     return response.data;
   },
 
-  // 채팅 메시지 보내기
-  sendMessage: async (message: string) => {
+  // 모델 목록 가져오기
+  getModels: async () => {
+    const response = await axios.get(`${API_CONFIG.AI_API_URL}/api/ai/models`);
+    return response.data; // 문자열 배열 반환 ['gemini-1.5-flash', ...]
+  },
+
+  // 모델명(model)을 같이 보냄
+  sendMessage: async (message: string, model: string) => {
     const response = await axios.post(`${API_CONFIG.AI_API_URL}/api/chat`, {
       message,
+      model,
     });
     return response.data;
   },
