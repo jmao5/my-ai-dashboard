@@ -223,71 +223,70 @@ def get_available_models():
         print(f"Model List Error: {e}")
         return ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"] # 에러 시 기본 목록
 
-# [채팅] Memory + RAG
+# [채팅]
 @app.post("/api/chat")
 async def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
     user_msg = request.message
     selected_model_name = request.model
 
-    print(f"🤖 [Model Check] 사용자가 요청한 모델: {selected_model_name}")
+    print(f"🤖 [Model Check] 요청 모델: {selected_model_name}")
 
-    # 1. 현재 질문 벡터화
+    # 1. 벡터화 및 DB 저장
     current_vector = get_embedding(user_msg)
-
-    # 2. 유저 메시지 DB 저장
     db_user_msg = database.ChatHistory(role="user", message=user_msg, embedding=current_vector)
     db.add(db_user_msg)
     db.commit()
 
     ai_response = ""
     try:
-        if not model:
-            ai_response = "AI 모델 오류"
+        if not model: # 전역 model 객체 체크 (기본 로딩 확인용)
+            ai_response = "AI 모델 오류: 초기화되지 않았습니다."
         else:
-            current_model = genai.GenerativeModel(selected_model_name)
+            # ✨ [핵심 1] 구글 검색 도구 장착! (인터넷 연결)
+            # 사용자가 선택한 모델에 'google_search' 도구를 달아서 새로 생성합니다.
+            tools = [{"google_search": {}}]
+            current_model = genai.GenerativeModel(selected_model_name, tools=tools)
 
-            print(f"✅ [System] 로드된 모델 객체: {current_model.model_name}")
-
-            # 3. 장기 기억 검색
+            # === 🧠 관련 기억 검색 (Long-term Memory) ===
             memory_context = ""
             if current_vector is not None:
                 memories = db.query(database.ChatHistory) \
                     .filter(database.ChatHistory.role == 'user') \
                     .filter(database.ChatHistory.id != db_user_msg.id) \
                     .order_by(database.ChatHistory.embedding.l2_distance(current_vector)) \
-                    .limit(5).all()
-                if memories:
-                    memory_context = "\n".join([f"- {m.timestamp.strftime('%Y-%m-%d')}: {m.message}" for m in memories])
+                    .limit(3).all() # 너무 많이 가져오면 헷갈려하므로 3개로 줄임
 
-            # 4. 문서 지식 검색
+                if memories:
+                    memory_context = "\n".join([f"- {m.message}" for m in memories])
+
+            # === 📂 문서 지식 검색 (RAG) ===
             doc_context = ""
             if current_vector is not None:
                 docs = db.query(database.DocumentChunk) \
                     .order_by(database.DocumentChunk.embedding.l2_distance(current_vector)) \
-                    .limit(3).all()
+                    .limit(2).all()
                 if docs:
-                    doc_context = "\n\n".join([f"[출처: {d.filename}]\n{d.content}" for d in docs])
+                    doc_context = "\n".join([d.content for d in docs])
 
-            # 5. 프롬프트 구성
+            # ✨ [핵심 2] 프롬프트 대수술 (자연스러운 대화 유도)
+            # XML 태그를 줄이고, 친구같은 어조를 강조합니다.
             system_prompt = f"""
-            당신은 유능한 AI 비서 'ServerBot'입니다.
+            너는 사용자의 개인 서버를 관리하는 똑똑하고 센스 있는 AI 파트너 'ServerBot'이야.
             
-            <instructions>
-            1. 자연스럽게 대화하세요. '문서에 따르면' 같은 말은 빼세요.
-            2. 과거 대화를 기억하고 있다면 적절히 언급해주세요.
-            3. 답변은 Markdown 형식을 사용하세요.
-            </instructions>
-            
-            <long_term_memory>
-            {memory_context if memory_context else "기억 없음"}
-            </long_term_memory>
-            
-            <knowledge_base>
-            {doc_context if doc_context else "관련 문서 없음"}
-            </knowledge_base>
+            [너의 성격과 행동 지침]
+            1. **친구처럼 대화해:** 딱딱한 보고서 말투보다는 "해요/했어요" 같은 부드러운 구어체를 써. 이모지(😊, 🚀)도 적절히 섞어서 생동감 있게 말해줘.
+            2. **모르면 검색해:** 날씨, 주식, 최신 뉴스 같은 정보는 네가 가진 '구글 검색 도구'를 써서 실시간 정보를 찾아봐.
+            3. **기억력:** 아래 [기억]과 [문서]는 네가 알고 있는 배경지식이야. 대화 흐름에 맞을 때만 자연스럽게 언급해. 억지로 끼워 맞추지 마.
+            4. **전문성:** 코딩이나 서버 문제는 정확하고 간결하게 해결책을 줘.
+
+            [우리의 지난 대화 기억]
+            {memory_context if memory_context else "없음"}
+
+            [참고 문서 내용]
+            {doc_context if doc_context else "없음"}
             """
 
-            # 6. 단기 기억 (최근 10개)
+            # 단기 기억 (흐름 유지)
             recent_history = db.query(database.ChatHistory) \
                 .order_by(database.ChatHistory.id.desc()).limit(10).all()
 
@@ -297,15 +296,18 @@ async def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
                 if msg.message == user_msg and msg.role == 'user': continue
                 gemini_history.append({"role": role, "parts": [msg.message]})
 
-            # 7. 생성 (current_model 사용)
+            # 채팅 시작
             chat_session = current_model.start_chat(history=gemini_history)
-            response = chat_session.send_message(f"{system_prompt}\n\n질문: {user_msg}")
+
+            # 질문 전송
+            response = chat_session.send_message(f"{system_prompt}\n\n사용자: {user_msg}")
             ai_response = response.text
 
     except Exception as e:
-        ai_response = f"Error: {str(e)}"
+        ai_response = f"앗, 문제가 생겼어! 😅\n(Error: {str(e)})"
         print(f"Gemini Error: {e}")
 
+    # 답변 저장
     db_ai_msg = database.ChatHistory(role="bot", message=ai_response)
     db.add(db_ai_msg)
     db.commit()
