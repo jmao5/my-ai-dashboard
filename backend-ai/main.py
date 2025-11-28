@@ -6,7 +6,7 @@ from sqlalchemy import text
 import database
 import os
 import google.generativeai as genai
-from google.ai.generativelanguage import Tool, GoogleSearchRetrieval
+from google.ai.generativelanguage import Tool, GoogleSearch
 import yfinance as yf
 from apscheduler.schedulers.background import BackgroundScheduler
 import requests
@@ -252,10 +252,9 @@ async def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
         if not model:
             ai_response = "AI 모델 오류: 초기화되지 않았습니다."
         else:
-            # ✨ [핵심 수정] 구글 검색 도구 설정 (v0.8.5+ 정석 방법)
-            # 딕셔너리({'google_search': {}}) 대신 공식 Tool 객체를 사용해야 에러가 안 납니다.
+            # ✨ [수정됨] 구글 검색 도구 설정 (최신 명칭 적용: google_search)
             search_tool = Tool(
-                google_search_retrieval=GoogleSearchRetrieval()
+                google_search=GoogleSearch()
             )
 
             # 사용자가 선택한 모델에 검색 도구를 달아서 새로 생성
