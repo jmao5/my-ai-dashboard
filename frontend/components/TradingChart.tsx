@@ -44,7 +44,7 @@ interface LegendData {
   ma20: string;
   ma60: string;
   ma120: string;
-  color: string; // 캔들 색상 (상승/하락)
+  color: string;
 }
 
 export default function TradingChart({ data }: ChartProps) {
@@ -78,26 +78,22 @@ export default function TradingChart({ data }: ChartProps) {
       height: 300,
       crosshair: {
         mode: CrosshairMode.Normal,
-        // 십자선 정보도 최소화
-        vertLine: {
-          width: 1,
-          color: "#9CA3AF",
-          style: 3, // Dashed
-        },
-        horzLine: {
-          visible: false, // 가로선 라벨 숨기기 위해 선도 숨김 (선택사항)
-          labelVisible: false, // 🚨 Y축 라벨 숨기기
-        },
+        vertLine: { width: 1, color: "#9CA3AF", style: 3 },
+        horzLine: { visible: false, labelVisible: false },
       },
+      // 👇 [수정] 시간축 설정 (여백 제거 및 꽉 채우기 준비)
       timeScale: {
         borderColor: "#374151",
         timeVisible: true,
         secondsVisible: false,
+        rightOffset: 2, // 오른쪽 여백 최소화 (기본값은 꽤 큼)
+        barSpacing: 10, // 기본 캔들 간격 (fitContent 호출 시 무시되지만 초기값으로 좋음)
+        fixLeftEdge: true, // 왼쪽 공백 방지 (데이터 시작점부터 보여줌)
       },
       rightPriceScale: {
         borderColor: "#374151",
         scaleMargins: {
-          top: 0.2, // 상단 여백을 줘서 차트가 레전드와 겹치지 않게 함
+          top: 0.2,
           bottom: 0.1,
         },
       },
@@ -105,7 +101,7 @@ export default function TradingChart({ data }: ChartProps) {
 
     chartRef.current = chart;
 
-    // 2. 시리즈 추가 (🚨 lastValueVisible: false 로 오른쪽 라벨 제거)
+    // 시리즈 추가
     const candleSeries = chart.addSeries(CandlestickSeries, {
       upColor: "#EF4444",
       downColor: "#3B82F6",
@@ -113,12 +109,11 @@ export default function TradingChart({ data }: ChartProps) {
       borderDownColor: "#3B82F6",
       wickUpColor: "#EF4444",
       wickDownColor: "#3B82F6",
-      priceLineVisible: false, // 현재가 선 숨기기 (선택)
-      lastValueVisible: false, // 🚨 오른쪽 축 값 숨기기
+      priceLineVisible: false,
+      lastValueVisible: false,
     });
     candleSeriesRef.current = candleSeries;
 
-    // 이평선 추가 (라벨 숨기기 적용)
     const maOption = {
       lineWidth: 2 as const,
       priceLineVisible: false,
@@ -148,7 +143,7 @@ export default function TradingChart({ data }: ChartProps) {
     ma60SeriesRef.current = ma60Series;
     ma120SeriesRef.current = ma120Series;
 
-    // 3. 마우스 움직임 감지 (상단 레전드 업데이트)
+    // 마우스 이벤트 (레전드)
     chart.subscribeCrosshairMove((param: MouseEventParams) => {
       if (
         param.time === undefined ||
@@ -158,10 +153,8 @@ export default function TradingChart({ data }: ChartProps) {
         param.point.y < 0 ||
         param.point.y > chartContainerRef.current!.clientHeight
       ) {
-        // 마우스가 차트 밖으로 나가면 -> 가장 마지막 데이터 표시
         updateLegendToLatest();
       } else {
-        // 마우스가 차트 위에 있으면 -> 해당 위치 데이터 표시
         updateLegend(param);
       }
     });
@@ -209,11 +202,8 @@ export default function TradingChart({ data }: ChartProps) {
     }
   };
 
-  // 최신 데이터로 레전드 초기화
   const updateLegendToLatest = () => {
     if (!candleSeriesRef.current) return;
-    // 마지막 데이터 가져오기 (이 부분은 data prop을 직접 참조하거나 series에서 가져올 수 있음)
-    // 여기서는 data prop의 마지막 요소를 사용
     if (data.length > 0) {
       const last = data[data.length - 1];
       setLegend({
@@ -303,8 +293,13 @@ export default function TradingChart({ data }: ChartProps) {
       ma60SeriesRef.current?.setData(ma60);
       ma120SeriesRef.current?.setData(ma120);
 
-      // 데이터 업데이트 시 레전드도 최신값으로
       updateLegendToLatest();
+
+      // 👇 [핵심] 데이터가 들어오면 화면에 꽉 차게 줌(Zoom)을 당겨줍니다!
+      // (약간의 지연을 줘서 렌더링 후 실행)
+      setTimeout(() => {
+        chartRef.current?.timeScale().fitContent();
+      }, 0);
     } catch (err) {
       console.error("Chart Update Error:", err);
     }
@@ -312,7 +307,6 @@ export default function TradingChart({ data }: ChartProps) {
 
   return (
     <div className="relative w-full h-full">
-      {/* 👆 [추가] 상단 레전드 오버레이 */}
       <div className="absolute top-2 left-2 z-10 bg-gray-900/80 p-2 rounded border border-gray-700 text-xs font-mono shadow-lg pointer-events-none">
         {legend ? (
           <div className="flex flex-wrap gap-x-4 gap-y-1">
@@ -333,8 +327,6 @@ export default function TradingChart({ data }: ChartProps) {
           <span className="text-gray-500">Loading...</span>
         )}
       </div>
-
-      {/* 차트 컨테이너 */}
       <div ref={chartContainerRef} className="w-full h-full" />
     </div>
   );
