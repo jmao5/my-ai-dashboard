@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   createChart,
   ColorType,
@@ -13,6 +13,7 @@ import {
   CandlestickData,
   LineData,
   UTCTimestamp,
+  MouseEventParams,
 } from "lightweight-charts";
 
 // 데이터 타입 정의
@@ -33,15 +34,32 @@ interface ChartProps {
   data: MarketData[];
 }
 
+// 레전드 표시용 상태 타입
+interface LegendData {
+  open: string;
+  high: string;
+  low: string;
+  close: string;
+  ma5: string;
+  ma20: string;
+  ma60: string;
+  ma120: string;
+  color: string; // 캔들 색상 (상승/하락)
+}
+
 export default function TradingChart({ data }: ChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
 
+  // 시리즈 참조
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const ma5SeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const ma20SeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const ma60SeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const ma120SeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+
+  // 상단 레전드 상태
+  const [legend, setLegend] = useState<LegendData | null>(null);
 
   // 1. 차트 초기화
   useEffect(() => {
@@ -49,8 +67,8 @@ export default function TradingChart({ data }: ChartProps) {
 
     const chart = createChart(chartContainerRef.current, {
       layout: {
-        background: { type: ColorType.Solid, color: "#1F2937" }, // 배경색
-        textColor: "#D1D5DB", // 텍스트 밝은 회색
+        background: { type: ColorType.Solid, color: "#1F2937" },
+        textColor: "#9CA3AF",
       },
       grid: {
         vertLines: { color: "#374151" },
@@ -58,48 +76,95 @@ export default function TradingChart({ data }: ChartProps) {
       },
       width: chartContainerRef.current.clientWidth,
       height: 300,
-      crosshair: { mode: CrosshairMode.Normal },
+      crosshair: {
+        mode: CrosshairMode.Normal,
+        // 십자선 정보도 최소화
+        vertLine: {
+          width: 1,
+          color: "#9CA3AF",
+          style: 3, // Dashed
+        },
+        horzLine: {
+          visible: false, // 가로선 라벨 숨기기 위해 선도 숨김 (선택사항)
+          labelVisible: false, // 🚨 Y축 라벨 숨기기
+        },
+      },
       timeScale: {
-        borderColor: "#4B5563",
+        borderColor: "#374151",
         timeVisible: true,
         secondsVisible: false,
       },
-      rightPriceScale: { borderColor: "#4B5563" },
+      rightPriceScale: {
+        borderColor: "#374151",
+        scaleMargins: {
+          top: 0.2, // 상단 여백을 줘서 차트가 레전드와 겹치지 않게 함
+          bottom: 0.1,
+        },
+      },
     });
 
     chartRef.current = chart;
 
-    // 캔들스틱 설정
-    candleSeriesRef.current = chart.addSeries(CandlestickSeries, {
+    // 2. 시리즈 추가 (🚨 lastValueVisible: false 로 오른쪽 라벨 제거)
+    const candleSeries = chart.addSeries(CandlestickSeries, {
       upColor: "#EF4444",
       downColor: "#3B82F6",
       borderUpColor: "#EF4444",
       borderDownColor: "#3B82F6",
       wickUpColor: "#EF4444",
       wickDownColor: "#3B82F6",
+      priceLineVisible: false, // 현재가 선 숨기기 (선택)
+      lastValueVisible: false, // 🚨 오른쪽 축 값 숨기기
+    });
+    candleSeriesRef.current = candleSeries;
+
+    // 이평선 추가 (라벨 숨기기 적용)
+    const maOption = {
+      lineWidth: 2 as const,
+      priceLineVisible: false,
+      lastValueVisible: false,
+      crosshairMarkerVisible: false,
+    };
+
+    const ma5Series = chart.addSeries(LineSeries, {
+      color: "#FACC15",
+      ...maOption,
+    });
+    const ma20Series = chart.addSeries(LineSeries, {
+      color: "#A78BFA",
+      ...maOption,
+    });
+    const ma60Series = chart.addSeries(LineSeries, {
+      color: "#10B981",
+      ...maOption,
+    });
+    const ma120Series = chart.addSeries(LineSeries, {
+      color: "#FB923C",
+      ...maOption,
     });
 
-    // 이평선 설정 (두께를 2로 키워서 선명하게!)
-    ma5SeriesRef.current = chart.addSeries(LineSeries, {
-      color: "#FACC15",
-      lineWidth: 2,
-      title: "MA5",
-    }); // 노랑
-    ma20SeriesRef.current = chart.addSeries(LineSeries, {
-      color: "#A78BFA",
-      lineWidth: 2,
-      title: "MA20",
-    }); // 보라
-    ma60SeriesRef.current = chart.addSeries(LineSeries, {
-      color: "#10B981",
-      lineWidth: 2,
-      title: "MA60",
-    }); // 초록
-    ma120SeriesRef.current = chart.addSeries(LineSeries, {
-      color: "#FB923C",
-      lineWidth: 2,
-      title: "MA120",
-    }); // 주황
+    ma5SeriesRef.current = ma5Series;
+    ma20SeriesRef.current = ma20Series;
+    ma60SeriesRef.current = ma60Series;
+    ma120SeriesRef.current = ma120Series;
+
+    // 3. 마우스 움직임 감지 (상단 레전드 업데이트)
+    chart.subscribeCrosshairMove((param: MouseEventParams) => {
+      if (
+        param.time === undefined ||
+        param.point === undefined ||
+        param.point.x < 0 ||
+        param.point.x > chartContainerRef.current!.clientWidth ||
+        param.point.y < 0 ||
+        param.point.y > chartContainerRef.current!.clientHeight
+      ) {
+        // 마우스가 차트 밖으로 나가면 -> 가장 마지막 데이터 표시
+        updateLegendToLatest();
+      } else {
+        // 마우스가 차트 위에 있으면 -> 해당 위치 데이터 표시
+        updateLegend(param);
+      }
+    });
 
     const handleResize = () => {
       if (chartContainerRef.current && chartRef.current) {
@@ -116,11 +181,59 @@ export default function TradingChart({ data }: ChartProps) {
     };
   }, []);
 
-  // 2. 데이터 업데이트
+  // 레전드 업데이트 함수
+  const updateLegend = (param: MouseEventParams) => {
+    const candleData = param.seriesData.get(
+      candleSeriesRef.current!,
+    ) as CandlestickData;
+    const ma5Data = param.seriesData.get(ma5SeriesRef.current!) as LineData;
+    const ma20Data = param.seriesData.get(ma20SeriesRef.current!) as LineData;
+    const ma60Data = param.seriesData.get(ma60SeriesRef.current!) as LineData;
+    const ma120Data = param.seriesData.get(ma120SeriesRef.current!) as LineData;
+
+    if (candleData) {
+      setLegend({
+        open: candleData.open.toFixed(2),
+        high: candleData.high.toFixed(2),
+        low: candleData.low.toFixed(2),
+        close: candleData.close.toFixed(2),
+        ma5: ma5Data?.value ? ma5Data.value.toFixed(2) : "-",
+        ma20: ma20Data?.value ? ma20Data.value.toFixed(2) : "-",
+        ma60: ma60Data?.value ? ma60Data.value.toFixed(2) : "-",
+        ma120: ma120Data?.value ? ma120Data.value.toFixed(2) : "-",
+        color:
+          candleData.close >= candleData.open
+            ? "text-red-500"
+            : "text-blue-500",
+      });
+    }
+  };
+
+  // 최신 데이터로 레전드 초기화
+  const updateLegendToLatest = () => {
+    if (!candleSeriesRef.current) return;
+    // 마지막 데이터 가져오기 (이 부분은 data prop을 직접 참조하거나 series에서 가져올 수 있음)
+    // 여기서는 data prop의 마지막 요소를 사용
+    if (data.length > 0) {
+      const last = data[data.length - 1];
+      setLegend({
+        open: last.open.toFixed(2),
+        high: last.high.toFixed(2),
+        low: last.low.toFixed(2),
+        close: last.close.toFixed(2),
+        ma5: last.ma5 ? last.ma5.toFixed(2) : "-",
+        ma20: last.ma20 ? last.ma20.toFixed(2) : "-",
+        ma60: last.ma60 ? last.ma60.toFixed(2) : "-",
+        ma120: last.ma120 ? last.ma120.toFixed(2) : "-",
+        color: last.close >= last.open ? "text-red-500" : "text-blue-500",
+      });
+    }
+  };
+
+  // 4. 데이터 업데이트
   useEffect(() => {
     if (!chartRef.current || data.length === 0) return;
 
-    // [Type Guard] 값 유효성 검사 (null, undefined, NaN, Infinity 차단)
     const isValid = (num: any): boolean => {
       return (
         num !== null &&
@@ -130,11 +243,8 @@ export default function TradingChart({ data }: ChartProps) {
       );
     };
 
-    // 1. 데이터 전처리 (시간 변환 및 정렬 준비)
     const parsedData = data.map((d) => {
       let timeValue: UTCTimestamp;
-
-      // 시간 파싱 (HH:MM -> Unix Timestamp)
       if (d.time.includes(":") && !d.time.includes("-")) {
         const now = new Date();
         const [h, m] = d.time.split(":").map(Number);
@@ -147,18 +257,12 @@ export default function TradingChart({ data }: ChartProps) {
         );
         timeValue = Math.floor(date.getTime() / 1000) as UTCTimestamp;
       } else {
-        // YYYY-MM-DD 등은 문자열 그대로 사용해도 되지만, 안전하게 Timestamp로 변환 추천
-        // 여기서는 라이브러리가 string date를 지원하므로 그대로 둠 (단, 정렬을 위해 Date 변환 비교 필요)
-        // *중요*: Lightweight chart에서 string time을 쓸 때는 포맷이 정확해야 함.
-        // 가장 안전한 건 다 Timestamp로 바꾸는 것임.
         const date = new Date(d.time);
         timeValue = Math.floor(date.getTime() / 1000) as UTCTimestamp;
       }
       return { ...d, timeValue };
     });
 
-    // 2. 시간순 정렬 (필수!)
-    // 중복 시간 제거를 위해 Map 사용
     const uniqueMap = new Map();
     parsedData.forEach((item) => {
       if (!isNaN(item.timeValue)) uniqueMap.set(item.timeValue, item);
@@ -167,7 +271,6 @@ export default function TradingChart({ data }: ChartProps) {
       (a: any, b: any) => a.timeValue - b.timeValue,
     );
 
-    // 3. 시리즈별 데이터 분리
     const candles: CandlestickData<Time>[] = [];
     const ma5: LineData<Time>[] = [];
     const ma20: LineData<Time>[] = [];
@@ -175,7 +278,6 @@ export default function TradingChart({ data }: ChartProps) {
     const ma120: LineData<Time>[] = [];
 
     sortedData.forEach((d: any) => {
-      // 캔들
       if (isValid(d.open) && isValid(d.close)) {
         candles.push({
           time: d.timeValue,
@@ -185,7 +287,6 @@ export default function TradingChart({ data }: ChartProps) {
           close: Number(d.close),
         });
       }
-      // 이평선 (값이 있을 때만 push)
       if (isValid(d.ma5)) ma5.push({ time: d.timeValue, value: Number(d.ma5) });
       if (isValid(d.ma20))
         ma20.push({ time: d.timeValue, value: Number(d.ma20) });
@@ -195,7 +296,6 @@ export default function TradingChart({ data }: ChartProps) {
         ma120.push({ time: d.timeValue, value: Number(d.ma120) });
     });
 
-    // 4. 차트에 데이터 주입 (에러 방지)
     try {
       candleSeriesRef.current?.setData(candles);
       ma5SeriesRef.current?.setData(ma5);
@@ -203,14 +303,39 @@ export default function TradingChart({ data }: ChartProps) {
       ma60SeriesRef.current?.setData(ma60);
       ma120SeriesRef.current?.setData(ma120);
 
-      // 약간의 지연 후 범위 맞춤 (UI 렌더링 안정화)
-      // requestAnimationFrame(() => chartRef.current?.timeScale().fitContent());
-      // -> 실시간 데이터에서는 fitContent를 매번 하면 깜빡일 수 있으니,
-      //    데이터 개수가 확 바뀌었을 때만 하는 게 좋지만, 일단은 그냥 둡니다.
+      // 데이터 업데이트 시 레전드도 최신값으로
+      updateLegendToLatest();
     } catch (err) {
       console.error("Chart Update Error:", err);
     }
   }, [data]);
 
-  return <div ref={chartContainerRef} className="w-full h-full relative" />;
+  return (
+    <div className="relative w-full h-full">
+      {/* 👆 [추가] 상단 레전드 오버레이 */}
+      <div className="absolute top-2 left-2 z-10 bg-gray-900/80 p-2 rounded border border-gray-700 text-xs font-mono shadow-lg pointer-events-none">
+        {legend ? (
+          <div className="flex flex-wrap gap-x-4 gap-y-1">
+            <div className={`flex gap-2 ${legend.color}`}>
+              <span>O: {legend.open}</span>
+              <span>H: {legend.high}</span>
+              <span>L: {legend.low}</span>
+              <span>C: {legend.close}</span>
+            </div>
+            <div className="flex gap-3 text-gray-400">
+              <span className="text-yellow-400">MA5: {legend.ma5}</span>
+              <span className="text-purple-400">MA20: {legend.ma20}</span>
+              <span className="text-green-500">MA60: {legend.ma60}</span>
+              <span className="text-orange-400">MA120: {legend.ma120}</span>
+            </div>
+          </div>
+        ) : (
+          <span className="text-gray-500">Loading...</span>
+        )}
+      </div>
+
+      {/* 차트 컨테이너 */}
+      <div ref={chartContainerRef} className="w-full h-full" />
+    </div>
+  );
 }
