@@ -10,9 +10,9 @@ import {
   Time,
   CandlestickSeries,
   LineSeries,
-  // 👇 [추가] 데이터 타입 임포트
   CandlestickData,
   LineData,
+  UTCTimestamp,
 } from "lightweight-charts";
 
 export interface MarketData {
@@ -56,17 +56,13 @@ export default function TradingChart({ data }: ChartProps) {
       },
       width: chartContainerRef.current.clientWidth,
       height: 300,
-      crosshair: {
-        mode: CrosshairMode.Normal,
-      },
+      crosshair: { mode: CrosshairMode.Normal },
       timeScale: {
         borderColor: "#374151",
         timeVisible: true,
         secondsVisible: false,
       },
-      rightPriceScale: {
-        borderColor: "#374151",
-      },
+      rightPriceScale: { borderColor: "#374151" },
     });
 
     chartRef.current = chart;
@@ -125,16 +121,13 @@ export default function TradingChart({ data }: ChartProps) {
   useEffect(() => {
     if (!chartRef.current || data.length === 0) return;
 
-    // ✅ [수정] any[] 대신 정확한 타입 명시
-    const candles: CandlestickData<Time>[] = [];
-    const ma5: LineData<Time>[] = [];
-    const ma20: LineData<Time>[] = [];
-    const ma60: LineData<Time>[] = [];
-    const ma120: LineData<Time>[] = [];
+    // ✅ [Type Guard] 숫자인지 확실하게 검사 (null, undefined 제외)
+    const isValid = (num: number | null | undefined): num is number => {
+      return typeof num === "number" && !isNaN(num) && isFinite(num);
+    };
 
-    data.forEach((d) => {
+    const parsedData = data.map((d) => {
       let timeValue: Time;
-
       if (d.time.includes(":") && !d.time.includes("-")) {
         const now = new Date();
         const [h, m] = d.time.split(":").map(Number);
@@ -145,32 +138,57 @@ export default function TradingChart({ data }: ChartProps) {
           h,
           m,
         );
-        timeValue = Math.floor(date.getTime() / 1000) as Time;
+        timeValue = Math.floor(date.getTime() / 1000) as UTCTimestamp;
       } else {
-        timeValue = d.time as Time;
+        timeValue = d.time as string; // 'YYYY-MM-DD' 형태는 string으로 사용 가능
       }
-
-      candles.push({
-        time: timeValue,
-        open: d.open,
-        high: d.high,
-        low: d.low,
-        close: d.close,
-      });
-
-      if (d.ma5 !== null) ma5.push({ time: timeValue, value: d.ma5 });
-      if (d.ma20 !== null) ma20.push({ time: timeValue, value: d.ma20 });
-      if (d.ma60 !== null) ma60.push({ time: timeValue, value: d.ma60 });
-      if (d.ma120 !== null) ma120.push({ time: timeValue, value: d.ma120 });
+      return { ...d, timeValue };
     });
 
+    // 시간순 정렬
+    parsedData.sort((a, b) => (a.timeValue > b.timeValue ? 1 : -1));
+
+    const candles: CandlestickData<Time>[] = [];
+    const ma5: LineData<Time>[] = [];
+    const ma20: LineData<Time>[] = [];
+    const ma60: LineData<Time>[] = [];
+    const ma120: LineData<Time>[] = [];
+
+    parsedData.forEach((d) => {
+      // 캔들 데이터
+      if (
+        isValid(d.open) &&
+        isValid(d.high) &&
+        isValid(d.low) &&
+        isValid(d.close)
+      ) {
+        candles.push({
+          time: d.timeValue,
+          open: d.open,
+          high: d.high,
+          low: d.low,
+          close: d.close,
+        });
+      }
+
+      // MA 데이터 (isValid가 true면 d.ma5는 number로 확정됨 -> ! 없어도 됨)
+      if (isValid(d.ma5)) ma5.push({ time: d.timeValue, value: d.ma5 });
+      if (isValid(d.ma20)) ma20.push({ time: d.timeValue, value: d.ma20 });
+      if (isValid(d.ma60)) ma60.push({ time: d.timeValue, value: d.ma60 });
+      if (isValid(d.ma120)) ma120.push({ time: d.timeValue, value: d.ma120 });
+    });
+
+    // 데이터 주입
     candleSeriesRef.current?.setData(candles);
     ma5SeriesRef.current?.setData(ma5);
     ma20SeriesRef.current?.setData(ma20);
     ma60SeriesRef.current?.setData(ma60);
     ma120SeriesRef.current?.setData(ma120);
 
-    chartRef.current.timeScale().fitContent();
+    // 렌더링 후 범위 조정
+    requestAnimationFrame(() => {
+      chartRef.current?.timeScale().fitContent();
+    });
   }, [data]);
 
   return <div ref={chartContainerRef} className="w-full h-full relative" />;
