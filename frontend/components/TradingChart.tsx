@@ -121,41 +121,54 @@ export default function TradingChart({ data }: ChartProps) {
   useEffect(() => {
     if (!chartRef.current || data.length === 0) return;
 
-    // ✅ [Type Guard] 숫자인지 확실하게 검사 (null, undefined 제외)
     const isValid = (num: number | null | undefined): num is number => {
       return typeof num === "number" && !isNaN(num) && isFinite(num);
     };
 
-    const parsedData = data.map((d) => {
-      let timeValue: Time;
-      if (d.time.includes(":") && !d.time.includes("-")) {
-        const now = new Date();
-        const [h, m] = d.time.split(":").map(Number);
+    // 1. 데이터 전처리: 모든 시간을 Unix Timestamp(숫자)로 통일
+    const processedData = data.map((d) => {
+      let timeValue: UTCTimestamp;
+
+      if (d.time.includes(":")) {
+        // "14:30" or "2024-11-27 14:30"
+        // 오늘 날짜 기준 or 날짜가 포함된 문자열 처리
         const date = new Date(
-          now.getFullYear(),
-          now.getMonth(),
-          now.getDate(),
-          h,
-          m,
+          d.time.includes("-")
+            ? d.time
+            : `${new Date().toISOString().split("T")[0]}T${d.time}`,
         );
         timeValue = Math.floor(date.getTime() / 1000) as UTCTimestamp;
       } else {
-        timeValue = d.time as string; // 'YYYY-MM-DD' 형태는 string으로 사용 가능
+        // "2024-11-27" (날짜만 있는 경우) -> 자정 기준
+        const date = new Date(d.time);
+        timeValue = Math.floor(date.getTime() / 1000) as UTCTimestamp;
       }
+
       return { ...d, timeValue };
     });
 
-    // 시간순 정렬
-    parsedData.sort((a, b) => (a.timeValue > b.timeValue ? 1 : -1));
+    // 2. 중복 제거 및 정렬 (시간 기준)
+    // Map을 사용하여 동일한 시간대의 데이터는 덮어씌웁니다 (중복 방지)
+    const uniqueDataMap = new Map();
+    processedData.forEach((item) => {
+      if (!isNaN(item.timeValue)) {
+        uniqueDataMap.set(item.timeValue, item);
+      }
+    });
 
+    // 다시 배열로 변환 후 오름차순 정렬
+    const sortedData = Array.from(uniqueDataMap.values()).sort(
+      (a: any, b: any) => a.timeValue - b.timeValue,
+    );
+
+    // 3. 시리즈별 데이터 분리
     const candles: CandlestickData<Time>[] = [];
     const ma5: LineData<Time>[] = [];
     const ma20: LineData<Time>[] = [];
     const ma60: LineData<Time>[] = [];
     const ma120: LineData<Time>[] = [];
 
-    parsedData.forEach((d) => {
-      // 캔들 데이터
+    sortedData.forEach((d: any) => {
       if (
         isValid(d.open) &&
         isValid(d.high) &&
@@ -170,25 +183,27 @@ export default function TradingChart({ data }: ChartProps) {
           close: d.close,
         });
       }
-
-      // MA 데이터 (isValid가 true면 d.ma5는 number로 확정됨 -> ! 없어도 됨)
       if (isValid(d.ma5)) ma5.push({ time: d.timeValue, value: d.ma5 });
       if (isValid(d.ma20)) ma20.push({ time: d.timeValue, value: d.ma20 });
       if (isValid(d.ma60)) ma60.push({ time: d.timeValue, value: d.ma60 });
       if (isValid(d.ma120)) ma120.push({ time: d.timeValue, value: d.ma120 });
     });
 
-    // 데이터 주입
-    candleSeriesRef.current?.setData(candles);
-    ma5SeriesRef.current?.setData(ma5);
-    ma20SeriesRef.current?.setData(ma20);
-    ma60SeriesRef.current?.setData(ma60);
-    ma120SeriesRef.current?.setData(ma120);
+    // 4. 데이터 주입 (안전하게 try-catch)
+    try {
+      candleSeriesRef.current?.setData(candles);
+      ma5SeriesRef.current?.setData(ma5);
+      ma20SeriesRef.current?.setData(ma20);
+      ma60SeriesRef.current?.setData(ma60);
+      ma120SeriesRef.current?.setData(ma120);
 
-    // 렌더링 후 범위 조정
-    requestAnimationFrame(() => {
-      chartRef.current?.timeScale().fitContent();
-    });
+      // 렌더링 후 범위 조정
+      requestAnimationFrame(() => {
+        chartRef.current?.timeScale().fitContent();
+      });
+    } catch (err) {
+      console.error("Chart Data Error:", err);
+    }
   }, [data]);
 
   return <div ref={chartContainerRef} className="w-full h-full relative" />;
