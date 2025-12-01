@@ -122,9 +122,19 @@ export default function MarketPage() {
                 <input
                   type="number"
                   step="0.1"
+                  min="0"
                   placeholder={currentThreshold.toString()}
                   value={thresholdInput}
-                  onChange={(e) => setThresholdInput(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val !== "" && parseFloat(val) < 0) return;
+                    setThresholdInput(val);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "-" || e.key === "e") {
+                      e.preventDefault();
+                    }
+                  }}
                   className="w-20 bg-gray-800 text-white text-sm font-bold border border-gray-600 rounded-lg py-1.5 pl-6 pr-2 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition text-center"
                 />
               </div>
