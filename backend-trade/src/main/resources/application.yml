@@ -1,0 +1,28 @@
+server:
+  port: 9016
+
+spring:
+  application:
+    name: backend-trade
+
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true
+        show_sql: true
+
+kis:
+  # 실전투자 URL (실계좌라면 이거 사용)
+  base-url: https://openapi.koreainvestment.com:9443
+  # 모의투자 URL (모의투자라면 주석 풀고 이거 사용)
+  base-url-order: https://openapivts.koreainvestment.com:29443
+  app-key: PS6w8Xtqxoy4AAUojm29YVkUfQikAurHN5nB
+  app-secret: ghgRpkN9UUAGI1d2l6o9cJQGXqtlF5yDHSfdEciF6Vr+qFsyTl1TKEDZhnfVwHtVsovEAaRnbh5GjPi4++Kft/9hGHk+0hXQCyCcIOMHjLyAGCAiQDraZOwmmoX1cIpYBtY0mC7wUWSxp1K6bszuWU4ZUAur7Fnzw1BNEBGbSKtZbYVbcXo=
