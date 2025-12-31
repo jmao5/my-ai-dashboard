@@ -9,6 +9,8 @@ plugins {
 group = "com.dash"
 version = "0.0.1-SNAPSHOT"
 
+val springCloudVersion by extra("2024.0.0")
+
 java {
 	toolchain {
 		languageVersion = JavaLanguageVersion.of(17)
@@ -19,24 +21,33 @@ repositories {
 	mavenCentral()
 }
 
-dependencies {
-	// 👇 [핵심 수정] 올바른 의존성 이름들
-	implementation("org.springframework.boot:spring-boot-starter-web") // webmvc가 아니라 web입니다
-	implementation("org.springframework.boot:spring-boot-starter-data-jpa")
-	implementation("org.springframework.boot:spring-boot-starter-webflux") // WebClient용
+dependencyManagement {
+	imports {
+		mavenBom("org.springframework.cloud:spring-cloud-dependencies:$springCloudVersion")
+	}
+}
 
-	// Kotlin 필수 모듈 (그룹 ID 수정됨)
+dependencies {
+	// Web
+	implementation("org.springframework.boot:spring-boot-starter-web")
+	implementation("org.springframework.boot:spring-boot-starter-webflux")
+
+	// JPA & DB
+	implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+	runtimeOnly("org.postgresql:postgresql")
+
+	// Feign Client
+	implementation("org.springframework.cloud:spring-cloud-starter-openfeign")
+
+	// Kotlin Modules
 	implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
 	implementation("org.jetbrains.kotlin:kotlin-reflect")
 
-	// 기타
+	// Reactive (WebFlux 사용 시 유용)
 	implementation("io.projectreactor.kotlin:reactor-kotlin-extensions")
 	implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
 
-	// DB
-	runtimeOnly("org.postgresql:postgresql")
-
-	// 테스트
+	// Test
 	testImplementation("org.springframework.boot:spring-boot-starter-test")
 	testImplementation("io.projectreactor:reactor-test")
 }
