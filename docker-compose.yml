@@ -74,14 +74,12 @@ services:
     container_name: dash-trade
     restart: always
     ports:
-      - "9018:9016" # ⚠️ AI와 충돌 방지를 위해 외부 포트를 9018로 설정
+      - "9018:9018"
     environment:
       - TZ=Asia/Seoul
-      # 👇 도커 내부 DB 주소(db:5432)로 연결 주입
       - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/${POSTGRES_DB}
       - SPRING_DATASOURCE_USERNAME=${POSTGRES_USER}
       - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD}
-      # 한국투자증권 API 키 (필요하다면 .env 파일에 추가 후 사용)
       - KIS_APP_KEY=${KIS_APP_KEY}
       - KIS_APP_SECRET=${KIS_APP_SECRET}
     depends_on:

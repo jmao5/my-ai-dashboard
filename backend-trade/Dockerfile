@@ -11,5 +11,5 @@ FROM amazoncorretto:17-alpine
 WORKDIR /app
 COPY --from=build /app/build/libs/*.jar app.jar
 ENV TZ=Asia/Seoul
-EXPOSE 9016
+EXPOSE 9018
 ENTRYPOINT ["java", "-jar", "app.jar"]
