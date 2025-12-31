@@ -30,21 +30,3 @@ data class RankingItem(
   @JsonProperty("last") val price: String,     // 현재가
   @JsonProperty("tvol") val volume: String     // 거래량
 )
-
-// 시가총액 순위 응답
-data class MarketCapResponse(
-  @JsonProperty("rt_cd") val rtCd: String,
-  @JsonProperty("msg1") val msg1: String,
-  @JsonProperty("output2") val output: List<MarketCapItem>? // 문서상 리스트는 output2 입니다.
-)
-
-// 시가총액 개별 아이템
-data class MarketCapItem(
-  @JsonProperty("rank") val rank: String,      // 순위
-  @JsonProperty("rsym") val symbol: String,    // 종목코드 (예: DNASAAPL)
-  @JsonProperty("name") val name: String,      // 종목명
-  @JsonProperty("last") val price: String,     // 현재가
-  @JsonProperty("tomv") val marketCap: String, // 시가총액
-  @JsonProperty("rate") val rate: String,      // 등락율
-  @JsonProperty("ename") val englishName: String // 영문명
-)
