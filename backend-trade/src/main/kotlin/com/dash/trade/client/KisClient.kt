@@ -2,37 +2,32 @@ package com.dash.trade.client
 
 import com.dash.trade.dto.MarketCapResponse
 import com.dash.trade.dto.OverseasNewsResponse
-import com.dash.trade.dto.TokenRequest
-import com.dash.trade.dto.TokenResponse
 import com.dash.trade.global.config.KisFeignConfig
 import org.springframework.cloud.openfeign.FeignClient
-import org.springframework.web.bind.annotation.*
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.RequestHeader
+import org.springframework.web.bind.annotation.RequestParam
 
 @FeignClient(name = "kisClient", url = "\${kis.base-url}", configuration = [KisFeignConfig::class])
 interface KisClient {
 
-  // 1. 토큰 발급 (POST)
-  @PostMapping("/oauth2/tokenP")
-  fun getAccessToken(@RequestBody request: TokenRequest): TokenResponse
-
-  // 2. [해외주식-047] 시가총액 순위 (GET)
+  // 1. [해외주식-047] 시가총액 순위
   @GetMapping("/uapi/overseas-stock/v1/ranking/market-cap")
   fun getMarketCapRanking(
-    @RequestHeader("authorization") authorization: String, // Bearer Token
-    @RequestHeader("tr_id") trId: String,                // Transaction ID
-    @RequestHeader("custtype") custType: String = "P",   // 고객타입 (기본 P)
+    // authorization 파라미터 삭제됨
+    @RequestHeader("tr_id") trId: String,
+    @RequestHeader("custtype") custType: String = "P",
 
-    // 쿼리 파라미터 매핑 (DTO 필드 -> API 파라미터명)
     @RequestParam("AUTH") auth: String = "",
     @RequestParam("EXCD") exchangeCode: String,
     @RequestParam("KEYB") nextKey: String,
     @RequestParam("VOL_RANG") volumeRange: String
   ): MarketCapResponse
 
-  // 3. [해외주식-053] 해외뉴스 제목 (GET)
+  // 2. [해외주식-053] 해외뉴스 제목
   @GetMapping("/uapi/overseas-price/v1/quotations/news-title")
   fun getOverseasNews(
-    @RequestHeader("authorization") authorization: String,
+    // authorization 파라미터 삭제됨
     @RequestHeader("tr_id") trId: String,
     @RequestHeader("custtype") custType: String = "P",
 
